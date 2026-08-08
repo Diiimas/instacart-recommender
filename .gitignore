@@ -1,0 +1,55 @@
+# Entorno virtual
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Variables de entorno y secretos
+.env
+.env.*
+!.env.example
+
+# Datos locales
+data/raw/*
+data/interim/*
+data/processed/*
+
+# Conservar la estructura de carpetas
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+
+# Salidas generadas
+reports/figures/*
+!reports/figures/.gitkeep
+
+# DuckDB y archivos temporales
+*.duckdb
+*.duckdb.wal
+*.db
+*.tmp
+
+# Herramientas de desarrollo
+.vscode/
+.idea/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Cobertura y pruebas
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Empaquetado
+build/
+dist/
+*.egg-info/

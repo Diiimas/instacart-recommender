@@ -1,0 +1,26 @@
+# ---------------------------------------------------------------------------
+# Proyecto Integrador — Recomendador Instacart · Sprint 1
+# Entorno oficial de referencia: Python 3.12.10
+#
+# Crear y activar el entorno:
+#   py -3.12 -m venv .venv
+#   Windows: .\.venv\Scripts\Activate.ps1
+#
+# Instalar dependencias:
+#   python -m pip install -r requirements.txt
+# ---------------------------------------------------------------------------
+
+# Procesamiento y análisis de datos
+duckdb==1.5.5
+pandas==2.3.3
+numpy==2.2.6
+
+# Visualización
+matplotlib==3.10.9
+
+# Ejecución de notebooks en VSCode/Jupyter
+ipykernel==7.3.0
+
+# Herramientas opcionales para ejecutar o convertir notebooks por consola
+# jupyter==1.1.1
+# nbconvert==7.17.1
