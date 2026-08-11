@@ -21,6 +21,9 @@ matplotlib==3.10.9
 # Ejecución de notebooks en VSCode/Jupyter
 ipykernel==7.3.0
 
+# Tests (carpeta tests/)
+pytest==8.4.2
+
 # Herramientas opcionales para ejecutar o convertir notebooks por consola
 # jupyter==1.1.1
 # nbconvert==7.17.1
