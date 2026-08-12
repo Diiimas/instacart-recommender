@@ -252,8 +252,18 @@ def main() -> None:
     controlar(con)
     resumir(con)
 
+    # El ORDER BY no es cosmetico. Sin el, el orden de las filas lo decide el
+    # LEFT JOIN de etiquetas, y ese orden FILTRA LA RESPUESTA: medido sobre
+    # las filas empatadas, las de etiqueta 1 caen en el puesto relativo 0.39 y
+    # las de etiqueta 0 en el 0.65, cuando ambas deberian dar 0.50.
+    #
+    # Cualquier codigo aguas abajo que ordene por un criterio con empates
+    # —el baseline de recompra, sin ir mas lejos— hereda ese orden como
+    # desempate y se lleva un premio que no gano. Escribir ordenado por
+    # (user_id, product_id) deja el archivo neutral respecto de la etiqueta.
     con.execute(
-        f"COPY features TO '{sql_path(args.salida)}' (FORMAT PARQUET)")
+        f"COPY (SELECT * FROM features ORDER BY user_id, product_id) "
+        f"TO '{sql_path(args.salida)}' (FORMAT PARQUET)")
     mb = args.salida.stat().st_size / 1024 ** 2
     print(f"\n{args.salida.name}: {mb:,.1f} MiB en {time.time() - t0:.0f} s")
     print(f"Ruta: {args.salida}")
