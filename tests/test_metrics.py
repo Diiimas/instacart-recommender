@@ -133,6 +133,75 @@ def test_orden_real_vacia_es_un_error():
 
 
 # --------------------------------------------------------------------------
+# Micro y macro
+#
+# El caso de referencia esta elegido para que los dos den distinto: el usuario
+# 2 compro un solo producto y lo acerto, asi que en el macro aporta un recall
+# de 1.0 con peso 1/3, y en el micro aporta 1 acierto sobre 6 objetivos.
+# --------------------------------------------------------------------------
+def test_recall_micro_suma_aciertos_y_objetivos_sin_promediar():
+    r = evaluar(RECOMENDACIONES, VERDAD, k=5, tamano_catalogo=100)
+    # aciertos: 2 + 1 + 0 = 3 | objetivos: 3 + 1 + 2 = 6
+    assert r["aciertos_totales"] == 3
+    assert r["objetivos_totales"] == 6
+    assert r["recall_micro"] == pytest.approx(0.5)
+
+
+def test_micro_y_macro_no_son_el_mismo_numero():
+    r = evaluar(RECOMENDACIONES, VERDAD, k=5, tamano_catalogo=100)
+    assert r["recall"] == pytest.approx(0.555555, abs=1e-5)
+    assert r["recall_micro"] == pytest.approx(0.5)
+    assert r["recall"] != pytest.approx(r["recall_micro"])
+
+
+def test_recall_macro_es_alias_de_recall():
+    # `recall` se conserva por compatibilidad; el alias existe para que la
+    # tabla de la Demo no dependa de recordar cual de los dos es.
+    r = evaluar(RECOMENDACIONES, VERDAD, k=5, tamano_catalogo=100)
+    assert r["recall_macro"] == r["recall"]
+
+
+def test_la_precision_micro_y_la_macro_coinciden_por_construccion():
+    # Todos los usuarios dividen por el mismo K, asi que promediar
+    # aciertos/K da lo mismo que aciertos_totales/(N*K). Por eso el modulo
+    # expone una sola precision: no hay dos numeros que reportar.
+    r = evaluar(RECOMENDACIONES, VERDAD, k=5, tamano_catalogo=100)
+    micro_a_mano = r["aciertos_totales"] / (r["n_usuarios"] * r["k"])
+    assert r["precision"] == pytest.approx(micro_a_mano)
+
+
+def test_micro_pondera_por_volumen_de_compra():
+    # Dos usuarios: uno compra 1 producto y se lo acertamos; el otro compra 10
+    # y no le acertamos ninguno. Macro dice 0.5, micro dice 1/11.
+    recs = {1: [7], 2: [99]}
+    verdad = {1: {7}, 2: set(range(100, 110))}
+    r = evaluar(recs, verdad, k=5, tamano_catalogo=1000, estricto=False)
+    assert r["recall"] == pytest.approx(0.5)
+    assert r["recall_micro"] == pytest.approx(1 / 11)
+
+
+def test_f1_micro_usa_el_recall_micro():
+    r = evaluar(RECOMENDACIONES, VERDAD, k=5, tamano_catalogo=100)
+    # 2 * 0.2 * 0.5 / (0.2 + 0.5)
+    assert r["f1_micro"] == pytest.approx(0.285714, abs=1e-5)
+
+
+def test_comparar_incluye_el_recall_micro_en_la_tabla():
+    tabla = comparar({"a": RECOMENDACIONES}, VERDAD, k=5, tamano_catalogo=100)
+    assert tabla[0]["recall_micro"] == pytest.approx(0.5)
+
+
+def test_los_micro_tambien_se_calculan_por_segmento():
+    segmentos = {1: "heavy", 2: "heavy", 3: "nuevo"}
+    r = evaluar(RECOMENDACIONES, VERDAD, k=5,
+                segmentos=segmentos, tamano_catalogo=100)
+    # heavy: aciertos 2 + 1 = 3 sobre objetivos 3 + 1 = 4
+    assert r["segmentos"]["heavy"]["recall_micro"] == pytest.approx(3 / 4)
+    # y su macro es (2/3 + 1/1) / 2 = 5/6, distinto
+    assert r["segmentos"]["heavy"]["recall"] == pytest.approx(5 / 6)
+
+
+# --------------------------------------------------------------------------
 # Segmentos
 # --------------------------------------------------------------------------
 def test_metricas_por_segmento():

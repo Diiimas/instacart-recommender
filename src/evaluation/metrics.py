@@ -22,16 +22,35 @@ que deja la definicion del protocolo pendiente de ratificacion):
   - Los promedios son MACRO: se calcula la metrica por usuario y despues se
     promedia entre usuarios. Cada persona pesa igual, sin importar cuanto
     compre. Es la lectura que corresponde a un KPI de negocio.
+  - Ademas se devuelve el RECALL MICRO: aciertos totales sobre objetivos
+    totales, sin pasar por el promedio por usuario. Ahi cada producto pesa
+    igual, asi que quien compra 50 productos pesa mas que quien compra 3. Es
+    la lectura de volumen agregado.
   - Precision divide por K, no por la cantidad de recomendaciones entregadas.
     Si el modelo devuelve menos de K, esa carencia se paga: en la interfaz
     real el espacio queda vacio igual.
+
+Sobre micro y macro conviene tener presente una identidad que sorprende: bajo
+la convencion de arriba, la precision MICRO y la MACRO son el mismo numero.
+Como todos los usuarios tienen el mismo denominador K, promediar aciertos/K
+entre N usuarios da exactamente aciertos_totales/(N*K). Por eso este modulo
+expone una sola precision y dos recalls: el unico que cambia es el recall,
+porque ahi el denominador es la cantidad de productos de cada persona y varia
+de usuario en usuario.
 
 Metricas que devuelve, y de donde sale cada una. Hoy el equipo tiene tres
 documentos proponiendo listas distintas; esta las unifica y ninguna se
 descarta:
 
   precision           README del repositorio
-  recall              README del repositorio
+  recall              README del repositorio. Es el MACRO; se conserva con
+                      este nombre por compatibilidad. Alias explicito:
+                      recall_macro
+  recall_micro        aciertos totales / objetivos totales. Es el numero con
+                      el que Dimas evaluo los candidatos, incorporado aca para
+                      que toda la tabla de la Demo salga del mismo codigo
+  f1_micro            f1 calculado con el recall micro, para que la tabla sea
+                      internamente consistente si se reporta esa columna
   f1                  handoff de Anastasia, como acompanamiento de las dos
                       anteriores
   hit_rate            KPI principal del marco de negocio de Leonardo, que lo
@@ -103,15 +122,23 @@ def _metricas(usuarios: list[int],
     """Calcula el bloque de metricas para un conjunto dado de usuarios."""
     if not usuarios:
         return {"n_usuarios": 0, "precision": 0.0, "recall": 0.0,
-                "f1": 0.0, "hit_rate": 0.0, "cobertura": 0.0,
-                "usuarios_completos": 0.0}
+                "recall_macro": 0.0, "recall_micro": 0.0,
+                "f1": 0.0, "f1_micro": 0.0, "hit_rate": 0.0, "cobertura": 0.0,
+                "usuarios_completos": 0.0,
+                "aciertos_totales": 0, "objetivos_totales": 0}
 
     precisiones, recalls, hits, completos = [], [], 0, 0
+    aciertos_totales, objetivos_totales = 0, 0
     recomendados_distintos: set[int] = set()
 
     for u in usuarios:
         recs = recomendaciones.get(u, [])
         reales = verdad[u]
+
+        # Los acumuladores del micro no pasan por el promedio por usuario:
+        # se suman aciertos y objetivos de todos y se dividen al final.
+        aciertos_totales += aciertos(recs, reales, k)
+        objetivos_totales += len(reales)
 
         precisiones.append(precision_en_k(recs, reales, k))
         recalls.append(recall_en_k(recs, reales, k))
@@ -123,15 +150,21 @@ def _metricas(usuarios: list[int],
 
     precision = sum(precisiones) / len(usuarios)
     recall = sum(recalls) / len(usuarios)
+    recall_micro = aciertos_totales / objetivos_totales
 
     return {
         "n_usuarios": len(usuarios),
         "precision": precision,
         "recall": recall,
+        "recall_macro": recall,       # alias explicito; `recall` es el macro
+        "recall_micro": recall_micro,
         "f1": _f1(precision, recall),
+        "f1_micro": _f1(precision, recall_micro),
         "hit_rate": hits / len(usuarios),
         "cobertura": len(recomendados_distintos) / tamano_catalogo,
         "usuarios_completos": completos / len(usuarios),
+        "aciertos_totales": aciertos_totales,
+        "objetivos_totales": objetivos_totales,
     }
 
 
@@ -243,6 +276,7 @@ def comparar(modelos: dict[str, dict[int, list[int]]],
             "modelo": nombre,
             "precision": m["precision"],
             "recall": m["recall"],
+            "recall_micro": m["recall_micro"],
             "f1": m["f1"],
             "hit_rate": m["hit_rate"],
             "cobertura": m["cobertura"],
@@ -288,18 +322,25 @@ def _autocomprobacion() -> None:
     r = evaluar(recomendaciones, verdad, k=5, tamano_catalogo=100)
 
     print("Verificacion con 3 usuarios inventados (K=5, catalogo=100)")
-    print(f"  precision  {r['precision']:.4f}   esperado 0.2000")
-    print(f"  recall     {r['recall']:.4f}   esperado 0.5556")
-    print(f"  f1         {r['f1']:.4f}   esperado 0.2941")
-    print(f"  hit_rate   {r['hit_rate']:.4f}   esperado 0.6667")
-    print(f"  cobertura  {r['cobertura']:.4f}   esperado 0.1300")
+    print(f"  precision     {r['precision']:.4f}   esperado 0.2000")
+    print(f"  recall macro  {r['recall']:.4f}   esperado 0.5556")
+    print(f"  recall micro  {r['recall_micro']:.4f}   esperado 0.5000")
+    print(f"  f1            {r['f1']:.4f}   esperado 0.2941")
+    print(f"  f1 micro      {r['f1_micro']:.4f}   esperado 0.2857")
+    print(f"  hit_rate      {r['hit_rate']:.4f}   esperado 0.6667")
+    print(f"  cobertura     {r['cobertura']:.4f}   esperado 0.1300")
     print()
     print("Las cuentas, para poder rehacerlas en papel:")
-    print("  precision = (2/5 + 1/5 + 0/5) / 3 = 0.6/3")
-    print("  recall    = (2/3 + 1/1 + 0/2) / 3 = 1.6667/3")
-    print("  f1        = 2*0.2*0.5556 / (0.2+0.5556)")
-    print("  hit_rate  = 2 usuarios con al menos un acierto / 3")
-    print("  cobertura = 13 productos distintos recomendados / 100")
+    print("  precision    = (2/5 + 1/5 + 0/5) / 3 = 0.6/3")
+    print("  recall macro = (2/3 + 1/1 + 0/2) / 3 = 1.6667/3")
+    print("  recall micro = (2 + 1 + 0) aciertos / (3 + 1 + 2) objetivos = 3/6")
+    print("  f1           = 2*0.2*0.5556 / (0.2+0.5556)")
+    print("  f1 micro     = 2*0.2*0.5    / (0.2+0.5)")
+    print("  hit_rate     = 2 usuarios con al menos un acierto / 3")
+    print("  cobertura    = 13 productos distintos recomendados / 100")
+    print()
+    print("Micro y macro difieren porque el usuario 2 pesa un tercio en el")
+    print("macro y un sexto en el micro: compro un solo producto.")
 
 
 if __name__ == "__main__":
