@@ -349,6 +349,9 @@ def build_user_profiles(connection) -> Path:
                 MAX(order_number) AS ultima_order_number,
                 MODE(order_dow) AS dow_habitual,
                 MODE(order_hour_of_day) AS hora_habitual,
+                MEDIAN(days_since_prior_order) FILTER (
+                    WHERE days_since_prior_order IS NOT NULL
+                ) AS mediana_dias_entre_ordenes_historicas,
                 SUM(
                     CASE
                         WHEN days_since_prior_order IS NULL THEN 1
@@ -415,6 +418,11 @@ def build_user_profiles(connection) -> Path:
 
             CAST(ou.dow_habitual AS TINYINT) AS dow_habitual,
             CAST(ou.hora_habitual AS TINYINT) AS hora_habitual,
+
+            CAST(
+                ou.mediana_dias_entre_ordenes_historicas
+                AS DOUBLE
+            ) AS mediana_dias_entre_ordenes_historicas,
 
             CAST(
                 CASE
@@ -491,6 +499,27 @@ def build_user_profiles(connection) -> Path:
         """
     ).fetchone()[0]
 
+    invalid_median_intervals = connection.execute(
+        """
+        SELECT COUNT(*)
+        FROM usuarios_analitico
+        WHERE mediana_dias_entre_ordenes_historicas < 0;
+        """
+    ).fetchone()[0]
+
+    unexpected_null_medians = connection.execute(
+        """
+        SELECT COUNT(*)
+        FROM usuarios_analitico
+        WHERE
+            (cantidad_ordenes_historicas = 1
+             AND mediana_dias_entre_ordenes_historicas IS NOT NULL)
+            OR
+            (cantidad_ordenes_historicas > 1
+             AND mediana_dias_entre_ordenes_historicas IS NULL);
+        """
+    ).fetchone()[0]
+
     if profile_rows != historical_users:
         raise ValueError(
             "El perfil no conserva todos los usuarios históricos: "
@@ -507,6 +536,19 @@ def build_user_profiles(connection) -> Path:
         raise ValueError(
             "La regla de primera orden no se cumple para todos los usuarios: "
             f"{users_with_first_order:,} de {historical_users:,}."
+        )
+
+    if invalid_median_intervals != 0:
+        raise ValueError(
+            "Se encontraron medianas negativas entre órdenes históricas: "
+            f"{invalid_median_intervals:,}."
+        )
+
+    if unexpected_null_medians != 0:
+        raise ValueError(
+            "La nulabilidad de la mediana entre órdenes no coincide con "
+            "la cantidad de órdenes históricas: "
+            f"{unexpected_null_medians:,} usuarios inconsistentes."
         )
 
     output_path_sql = output_path.as_posix().replace("'", "''")
@@ -571,24 +613,44 @@ def build_user_product_interactions(connection) -> Path:
         """
         CREATE OR REPLACE TEMP TABLE interacciones_analitico AS
 
-        WITH historial AS (
+        WITH ordenes_con_tiempo AS (
+            SELECT
+                user_id,
+                order_id,
+                order_number,
+                order_dow,
+                order_hour_of_day,
+                SUM(COALESCE(days_since_prior_order, 0)) OVER (
+                    PARTITION BY user_id
+                    ORDER BY order_number
+                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                ) AS dias_acumulados_registrados
+            FROM orders
+            WHERE eval_set = 'prior'
+        ),
+
+        historial AS (
             SELECT
                 o.user_id,
                 op.product_id,
                 o.order_number,
                 o.order_dow,
                 o.order_hour_of_day,
+                o.dias_acumulados_registrados,
                 op.add_to_cart_order
-            FROM orders AS o
+            FROM ordenes_con_tiempo AS o
             INNER JOIN order_products_prior AS op
                 ON o.order_id = op.order_id
-            WHERE o.eval_set = 'prior'
         ),
 
         ultima_orden_usuario AS (
             SELECT
                 user_id,
-                MAX(order_number) AS ultima_order_number_usuario
+                MAX(order_number) AS ultima_order_number_usuario,
+                ARG_MAX(
+                    dias_acumulados_registrados,
+                    order_number
+                ) AS dias_acumulados_ultima_orden
             FROM historial
             GROUP BY user_id
         ),
@@ -599,6 +661,10 @@ def build_user_product_interactions(connection) -> Path:
                 h.product_id,
                 COUNT(*) AS freq_usuario_producto,
                 MAX(h.order_number) AS ultima_orden_producto,
+                ARG_MAX(
+                    h.dias_acumulados_registrados,
+                    h.order_number
+                ) AS dias_acumulados_ultima_compra,
                 AVG(h.add_to_cart_order) AS add_to_cart_order_promedio,
                 ARG_MAX(h.order_dow, h.order_number) AS ultima_order_dow,
                 ARG_MAX(
@@ -625,6 +691,12 @@ def build_user_product_interactions(connection) -> Path:
                 - a.ultima_orden_producto
                 AS INTEGER
             ) AS recencia_usuario_producto,
+
+            CAST(
+                u.dias_acumulados_ultima_orden
+                - a.dias_acumulados_ultima_compra
+                AS INTEGER
+            ) AS dias_registrados_desde_ultima_compra,
 
             CAST(
                 a.ultima_orden_producto
@@ -701,6 +773,23 @@ def build_user_product_interactions(connection) -> Path:
         """
     ).fetchone()[0]
 
+    invalid_days_recency = connection.execute(
+        """
+        SELECT COUNT(*)
+        FROM interacciones_analitico
+        WHERE dias_registrados_desde_ultima_compra < 0;
+        """
+    ).fetchone()[0]
+
+    invalid_latest_purchase_days = connection.execute(
+        """
+        SELECT COUNT(*)
+        FROM interacciones_analitico
+        WHERE recencia_usuario_producto = 0
+          AND dias_registrados_desde_ultima_compra != 0;
+        """
+    ).fetchone()[0]
+
     if total_frequency != prior_rows:
         raise ValueError(
             "Las frecuencias usuario-producto no conservan todas las "
@@ -718,6 +807,19 @@ def build_user_product_interactions(connection) -> Path:
         raise ValueError(
             "Se encontraron valores negativos de recencia: "
             f"{invalid_recency:,}."
+        )
+
+    if invalid_days_recency != 0:
+        raise ValueError(
+            "Se encontraron valores negativos de días registrados desde "
+            f"la última compra: {invalid_days_recency:,}."
+        )
+
+    if invalid_latest_purchase_days != 0:
+        raise ValueError(
+            "Hay productos de la última orden histórica cuya recencia "
+            "temporal no es cero: "
+            f"{invalid_latest_purchase_days:,}."
         )
 
     output_path_sql = output_path.as_posix().replace("'", "''")
@@ -744,8 +846,6 @@ def build_user_product_interactions(connection) -> Path:
 def validate_source_quality(connection) -> None:
     """
     Ejecuta controles de calidad sobre las fuentes originales.
-
- las fuentes originales.
 
     El pipeline se detiene si encuentra:
     - Productos huérfanos en el historial.

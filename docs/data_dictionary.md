@@ -98,6 +98,7 @@ Perfil de comportamiento de cada usuario, calculado exclusivamente con sus
 | `posicion_media_carrito` | DOUBLE | Posición promedio de sus productos dentro del carrito. |
 | `dow_habitual` | TINYINT | Día de la semana más frecuente para realizar pedidos. |
 | `hora_habitual` | TINYINT | Hora del día más frecuente para realizar pedidos. |
+| `mediana_dias_entre_ordenes_historicas` | DOUBLE | Mediana de los intervalos registrados entre órdenes `prior` del usuario, excluyendo el intervalo nulo de la primera orden. Queda `NULL` cuando no existen intervalos observables. No corrige el censurado en 30 días. |
 | `tiene_primera_orden` | TINYINT | Indica si se identificó la primera orden del usuario mediante un intervalo nulo. |
 | `tiene_intervalo_censurado_30` | TINYINT | Indica si el usuario presenta al menos un intervalo registrado con el límite de 30 días. |
 | `cantidad_intervalos_censurados_30` | INTEGER | Cantidad de intervalos entre órdenes registrados como 30 días. |
@@ -130,6 +131,7 @@ recomendación personalizados.
 | `product_id` | INTEGER | Identificador del producto comprado. |
 | `freq_usuario_producto` | INTEGER | Cantidad de veces que el usuario compró el producto. |
 | `recencia_usuario_producto` | INTEGER | Cantidad de órdenes transcurridas entre la última compra del producto y la última orden histórica del usuario. Un valor de 0 indica que apareció en su orden histórica más reciente. |
+| `dias_registrados_desde_ultima_compra` | INTEGER | Suma de los intervalos registrados entre la última compra histórica del producto y la última orden `prior` del usuario. Un valor de 0 indica que apareció en la orden histórica más reciente. Debido al censurado en 30 días, puede subestimar el tiempo calendario real. |
 | `ultima_orden_producto` | INTEGER | Número de la última orden histórica en la que el usuario compró el producto. |
 | `add_to_cart_order_promedio` | DOUBLE | Posición promedio del producto en los carritos del usuario. |
 | `ultima_order_dow` | TINYINT | Día de la semana de la última compra histórica del producto. |
@@ -149,7 +151,12 @@ recomendación personalizados.
 - `days_since_prior_order = NULL` identifica la primera orden de cada usuario.
 - El valor 30 en `days_since_prior_order` se interpreta como un intervalo
   censurado por el límite del dataset.
-- La recencia se mide en número de órdenes y no en días calendario.
+- `recencia_usuario_producto` se mide en número de órdenes.
+- `dias_registrados_desde_ultima_compra` acumula los intervalos disponibles,
+  pero no representa necesariamente días calendario exactos porque los valores
+  de 30 días están censurados.
+- `mediana_dias_entre_ordenes_historicas` conserva ese mismo censurado y queda
+  nula cuando el usuario no tiene intervalos históricos observables.
 - Los archivos Parquet se regeneran ejecutando:
 
 ```powershell
