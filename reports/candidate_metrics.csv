@@ -1,0 +1,4 @@
+sistema,recomendaciones,usuarios_con_recomendaciones,usuarios_topk_completo,productos_recomendados,aciertos,recall_micro,recall_macro,hit_rate,cobertura_catalogo,usuarios_topk_completo_pct
+baseline_historico,1279733,131209,123088,35748,361675,0.261209,0.329784,0.854949,0.719449,0.938106
+candidatos_nuevos_top10,1312090,131209,131209,531,18071,0.013051,0.012907,0.116151,0.010687,1.0
+baseline_mas_relleno,1312090,131209,131209,35748,361931,0.261394,0.330293,0.855498,0.719449,1.0
