@@ -156,10 +156,6 @@ def construir(con: duckdb.DuckDBPyConnection, limite: int | None) -> None:
             i.add_to_cart_order_promedio
                 / NULLIF(u.posicion_media_carrito, 0) AS posicion_relativa,
 
-            -- Cuantos de los productos distintos del usuario compiten por los
-            -- diez lugares.
-            u.productos_distintos               AS competencia_por_slot,
-
             COALESCE(e.etiqueta, 0)             AS etiqueta
 
         FROM '{sql_path(PROCESSED_DIR / "interacciones.parquet")}' AS i
