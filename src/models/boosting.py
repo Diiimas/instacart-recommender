@@ -81,6 +81,40 @@ def cortar_para_early_stopping(train: pd.DataFrame, proporcion: float = 0.10):
     return train[es_ajuste], train[~es_ajuste]
 
 
+def entrenar(train: pd.DataFrame, valid: pd.DataFrame, arboles: int = 600):
+    """
+    Ajusta el modelo con `train` y devuelve la probabilidad de cada fila de
+    `valid`, junto con el modelo.
+
+    Igual que en la regresion logistica, vive separado de main() para que el
+    script de comparacion entrene exactamente este modelo y no una copia que
+    pueda irse separando.
+    """
+    ajuste, freno = cortar_para_early_stopping(train)
+
+    modelo = lgb.LGBMClassifier(
+        n_estimators=arboles,
+        learning_rate=0.05,
+        num_leaves=63,
+        min_child_samples=200,
+        subsample=0.8,
+        subsample_freq=1,
+        colsample_bytree=0.8,
+        random_state=SEMILLA,
+        n_jobs=4,
+        verbose=-1,
+    )
+    modelo.fit(
+        ajuste[VARIABLES], ajuste["etiqueta"],
+        eval_set=[(freno[VARIABLES], freno["etiqueta"])],
+        eval_metric="auc",
+        callbacks=[lgb.early_stopping(50, verbose=False),
+                   lgb.log_evaluation(0)],
+    )
+    probabilidad = modelo.predict_proba(valid[VARIABLES])[:, 1]
+    return probabilidad, modelo
+
+
 def main() -> None:
     args = parse_args()
     t0 = time.time()
@@ -96,37 +130,15 @@ def main() -> None:
         train = train.sample(n=min(args.muestra, len(train)),
                              random_state=SEMILLA)
 
-    ajuste, freno = cortar_para_early_stopping(train)
-    print(f"  ajuste     {len(ajuste):,} filas de {ajuste['user_id'].nunique():,} usuarios")
-    print(f"  freno      {len(freno):,} filas de {freno['user_id'].nunique():,} usuarios")
-    print(f"  validacion {len(valid):,} filas de {valid['user_id'].nunique():,} usuarios")
-
-    modelo = lgb.LGBMClassifier(
-        n_estimators=args.arboles,
-        learning_rate=0.05,
-        num_leaves=63,
-        min_child_samples=200,
-        subsample=0.8,
-        subsample_freq=1,
-        colsample_bytree=0.8,
-        random_state=SEMILLA,
-        n_jobs=4,
-        verbose=-1,
-    )
+    print(f"  entrenamiento {len(train):,} filas de {train['user_id'].nunique():,} usuarios")
+    print(f"  validacion    {len(valid):,} filas de {valid['user_id'].nunique():,} usuarios")
 
     print("\nEntrenando...")
     t1 = time.time()
-    modelo.fit(
-        ajuste[VARIABLES], ajuste["etiqueta"],
-        eval_set=[(freno[VARIABLES], freno["etiqueta"])],
-        eval_metric="auc",
-        callbacks=[lgb.early_stopping(50, verbose=False),
-                   lgb.log_evaluation(0)],
-    )
+    p_valid, modelo = entrenar(train, valid, args.arboles)
     print(f"  listo en {time.time() - t1:.0f} s "
           f"con {modelo.best_iteration_} arboles de {args.arboles}")
 
-    p_valid = modelo.predict_proba(valid[VARIABLES])[:, 1]
     recs_modelo = recomendar(valid, p_valid, args.k)
 
     usuarios = set(valid["user_id"].unique())

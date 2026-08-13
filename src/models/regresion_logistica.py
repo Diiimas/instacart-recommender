@@ -101,6 +101,33 @@ def preparar(df: pd.DataFrame, mediana_ciclos: float | None = None):
     return X, mediana_ciclos
 
 
+def entrenar(train: pd.DataFrame, valid: pd.DataFrame):
+    """
+    Ajusta el modelo con `train` y devuelve la probabilidad de cada fila de
+    `valid`, junto con el modelo y los nombres de las columnas usadas.
+
+    Vive separado de main() para que el script de comparacion pueda entrenar
+    exactamente este modelo, sin copiar el procedimiento. Si estuviera
+    duplicado, los dos podrian irse separando y la tabla de la Demo dejaria de
+    corresponderse con lo que reporta este modulo.
+    """
+    X_train, mediana = preparar(train)
+    y_train = train["etiqueta"].to_numpy()
+    X_valid, _ = preparar(valid, mediana)
+
+    # La regresion logistica es sensible a la escala: sin normalizar,
+    # popularidad_producto (cientos de miles) aplasta a ratio (entre 0 y 1) y
+    # el optimizador no converge. El escalador se ajusta SOLO con
+    # entrenamiento y se aplica a validacion.
+    escalador = StandardScaler().fit(X_train)
+
+    modelo = LogisticRegression(max_iter=1000, C=1.0, random_state=SEMILLA)
+    modelo.fit(escalador.transform(X_train), y_train)
+
+    probabilidad = modelo.predict_proba(escalador.transform(X_valid))[:, 1]
+    return probabilidad, modelo, list(X_train.columns)
+
+
 def recomendar(df: pd.DataFrame, probabilidad: np.ndarray, k: int) -> dict:
     """
     Convierte una probabilidad por fila en una lista de k productos por usuario.
@@ -138,23 +165,11 @@ def main() -> None:
     print(f"  entrenamiento {len(train):,} filas de {train['user_id'].nunique():,} usuarios")
     print(f"  validacion    {len(valid):,} filas de {valid['user_id'].nunique():,} usuarios")
 
-    X_train, mediana = preparar(train)
-    y_train = train["etiqueta"].to_numpy()
-    X_valid, _ = preparar(valid, mediana)
-
-    # La regresion logistica es sensible a la escala: sin normalizar,
-    # popularidad_producto (cientos de miles) aplasta a ratio (entre 0 y 1) y
-    # el optimizador no converge. El escalador se ajusta SOLO con
-    # entrenamiento y se aplica a validacion.
-    escalador = StandardScaler().fit(X_train)
-
     print("\nEntrenando...")
     t1 = time.time()
-    modelo = LogisticRegression(max_iter=1000, C=1.0, random_state=SEMILLA)
-    modelo.fit(escalador.transform(X_train), y_train)
+    p_valid, modelo, columnas = entrenar(train, valid)
     print(f"  listo en {time.time() - t1:.0f} s")
 
-    p_valid = modelo.predict_proba(escalador.transform(X_valid))[:, 1]
     recs_modelo = recomendar(valid, p_valid, args.k)
 
     usuarios = set(valid["user_id"].unique())
@@ -184,7 +199,7 @@ def main() -> None:
     print(por_seg[["n_usuarios", "recall", "techo", "pct_del_techo",
                    "hit_rate"]].round(4).to_string())
 
-    pesos = (pd.DataFrame({"variable": list(X_train.columns),
+    pesos = (pd.DataFrame({"variable": columnas,
                            "peso": modelo.coef_[0]})
              .assign(magnitud=lambda d: d["peso"].abs())
              .sort_values("magnitud", ascending=False))
