@@ -66,6 +66,27 @@ VARIABLES = [
     "ciclos_desde_ultima_compra",
     "recencia_relativa",
     "posicion_relativa",
+    # contexto de la orden objetivo y "esta vencido?"
+    "dias_hasta_orden_objetivo",
+    "dow_orden_objetivo",
+    "hora_orden_objetivo",
+    "dias_sin_comprar_total",
+    "cadencia_par",
+    "vencimiento",
+    "ciclos_totales",
+]
+
+# Columnas que pueden venir NULL, con el motivo. Se listan a mano y no se
+# detectan: si se detectaran, una columna con nulos en entrenamiento y sin
+# nulos en validacion generaria un indicador en un lado y no en el otro, y las
+# dos matrices dejarian de tener las mismas columnas.
+COLUMNAS_CON_NULOS = [
+    # el usuario hace varios pedidos el mismo dia: su ciclo mide cero
+    "ciclos_desde_ultima_compra",
+    "ciclos_totales",
+    # el producto se compro una sola vez: no hay intervalo que medir
+    "cadencia_par",
+    "vencimiento",
 ]
 
 
@@ -77,28 +98,34 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def preparar(df: pd.DataFrame, mediana_ciclos: float | None = None):
+def preparar(df: pd.DataFrame, medianas: dict[str, float] | None = None):
     """
     Deja la matriz de variables lista para sklearn.
 
-    `ciclos_desde_ultima_compra` viene NULL para los usuarios cuya mediana de
-    dias entre ordenes es 0 (hacen varios pedidos el mismo dia). La regresion
-    logistica no acepta nulos, asi que se imputa con la mediana y se agrega una
-    columna que avisa que fue imputado: si esos usuarios se comportan distinto,
-    el modelo puede aprenderlo en vez de tragarse un valor inventado como si
-    fuera real.
+    La regresion logistica no acepta nulos. Para cada columna de
+    COLUMNAS_CON_NULOS se imputa la mediana y se agrega una columna que avisa
+    que ese valor fue imputado. El indicador importa: si los usuarios que hacen
+    varios pedidos el mismo dia, o los productos comprados una sola vez, se
+    comportan distinto, el modelo puede aprenderlo en vez de tragarse un valor
+    inventado como si fuera real.
 
-    La mediana se calcula SOBRE ENTRENAMIENTO y se reutiliza en validacion.
-    Calcularla sobre validacion seria dejar que el conjunto de prueba influya
+    Las medianas se calculan SOBRE ENTRENAMIENTO y se reutilizan en validacion.
+    Calcularlas sobre validacion seria dejar que el conjunto de prueba influya
     en el preprocesamiento.
     """
     X = df[VARIABLES].astype("float32").copy()
-    indefinido = X["ciclos_desde_ultima_compra"].isna()
-    if mediana_ciclos is None:
-        mediana_ciclos = float(X.loc[~indefinido, "ciclos_desde_ultima_compra"].median())
-    X["ciclos_desde_ultima_compra"] = X["ciclos_desde_ultima_compra"].fillna(mediana_ciclos)
-    X["ciclo_indefinido"] = indefinido.astype("float32")
-    return X, mediana_ciclos
+    calcular = medianas is None
+    if calcular:
+        medianas = {}
+
+    for col in COLUMNAS_CON_NULOS:
+        faltante = X[col].isna()
+        if calcular:
+            medianas[col] = float(X.loc[~faltante, col].median())
+        X[col] = X[col].fillna(medianas[col])
+        X[f"{col}_imputado"] = faltante.astype("float32")
+
+    return X, medianas
 
 
 def entrenar(train: pd.DataFrame, valid: pd.DataFrame):
@@ -111,9 +138,9 @@ def entrenar(train: pd.DataFrame, valid: pd.DataFrame):
     duplicado, los dos podrian irse separando y la tabla de la Demo dejaria de
     corresponderse con lo que reporta este modulo.
     """
-    X_train, mediana = preparar(train)
+    X_train, medianas = preparar(train)
     y_train = train["etiqueta"].to_numpy()
-    X_valid, _ = preparar(valid, mediana)
+    X_valid, _ = preparar(valid, medianas)
 
     # La regresion logistica es sensible a la escala: sin normalizar,
     # popularidad_producto (cientos de miles) aplasta a ratio (entre 0 y 1) y

@@ -47,6 +47,7 @@ import duckdb
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
+RAW_DIR = PROJECT_ROOT / "data" / "raw"
 SALIDA = PROCESSED_DIR / "features.parquet"
 
 # Fijo para que la particion sea siempre la misma. Cambiarlo invalida la
@@ -107,6 +108,68 @@ def construir(con: duckdb.DuckDBPyConnection, limite: int | None) -> None:
         FROM '{sql_path(PROCESSED_DIR / "targets_train.parquet")}';
     """)
 
+    # ----------------------------------------------------------------------
+    # Contexto de la orden objetivo
+    #
+    # Cuando la persona abre la app ya sabemos cuantos dias pasaron desde su
+    # pedido anterior, y que dia y hora es. Es informacion disponible al
+    # momento de recomendar, asi que usarla no es fuga: la fuga seria usar QUE
+    # compro en esa orden, no CUANDO vino.
+    #
+    # Hoy el modelo sabe hace cuanto la persona llevo cada producto, pero no si
+    # volvio a los tres dias o al mes. Sin esto, "hace 20 dias que no lleva
+    # leche" no se puede distinguir de "hace 20 dias que no lleva leche Y hoy
+    # vuelve a comprar despues de 21".
+    #
+    # Sale de data/raw porque el pipeline no lo expone. Conviene moverlo alla
+    # cuando haya tiempo: aca queda fuera del lugar que le corresponde.
+    # ----------------------------------------------------------------------
+    con.execute(f"""
+        CREATE OR REPLACE TABLE contexto_objetivo AS
+        SELECT user_id,
+               days_since_prior_order          AS dias_hasta_orden_objetivo,
+               CAST(order_dow AS TINYINT)      AS dow_orden_objetivo,
+               -- order_hour_of_day viene con cero adelante ('00'..'23'), asi
+               -- que DuckDB lo infiere como texto. Los 24 valores son validos;
+               -- el cast es por el formato, no por dato sucio.
+               CAST(order_hour_of_day AS TINYINT) AS hora_orden_objetivo
+        FROM '{sql_path(RAW_DIR / "orders.csv")}'
+        WHERE eval_set = 'train';
+    """)
+
+    # ----------------------------------------------------------------------
+    # Cadencia del par usuario-producto
+    #
+    # Cada cuantos dias ESA persona recompra ESE producto. Hoy solo existe la
+    # cadencia del usuario, y el papel higienico y la banana tienen ciclos muy
+    # distintos para la misma persona.
+    #
+    # Se calcula como el lapso entre la primera y la ultima compra del producto
+    # dividido por la cantidad de intervalos observados. Queda NULL cuando el
+    # producto se compro una sola vez: con una compra no hay intervalo que
+    # medir, y no corresponde inventarlo.
+    # ----------------------------------------------------------------------
+    con.execute(f"""
+        CREATE OR REPLACE TABLE cadencia_par AS
+        WITH dias AS (
+            SELECT order_id, user_id,
+                   SUM(COALESCE(days_since_prior_order, 0)) OVER (
+                       PARTITION BY user_id ORDER BY order_number
+                   ) AS dias_acumulados
+            FROM '{sql_path(RAW_DIR / "orders.csv")}'
+            WHERE eval_set = 'prior'
+        )
+        SELECT d.user_id,
+               op.product_id,
+               CASE WHEN COUNT(*) > 1
+                    THEN (MAX(d.dias_acumulados) - MIN(d.dias_acumulados))
+                         * 1.0 / (COUNT(*) - 1)
+               END AS cadencia_par
+        FROM '{sql_path(RAW_DIR / "order_products__prior.csv")}' AS op
+        INNER JOIN dias AS d USING (order_id)
+        GROUP BY 1, 2;
+    """)
+
     con.execute(f"""
         CREATE OR REPLACE VIEW features AS
         SELECT
@@ -156,6 +219,34 @@ def construir(con: duckdb.DuckDBPyConnection, limite: int | None) -> None:
             i.add_to_cart_order_promedio
                 / NULLIF(u.posicion_media_carrito, 0) AS posicion_relativa,
 
+            -- ---------------- contexto de la orden objetivo ----------------
+            co.dias_hasta_orden_objetivo,
+            co.dow_orden_objetivo,
+            co.hora_orden_objetivo,
+
+            -- Dias reales sin comprar el producto, contados hasta el momento
+            -- de la orden que estamos prediciendo. La columna del pipeline
+            -- solo llega hasta la ultima orden prior; esto suma el tramo que
+            -- falta.
+            i.dias_registrados_desde_ultima_compra
+                + co.dias_hasta_orden_objetivo   AS dias_sin_comprar_total,
+
+            -- La variable que responde ".esta vencido?". Mayor que 1 significa
+            -- que ya paso mas tiempo del que esa persona suele tardar en
+            -- reponer ESE producto.
+            (i.dias_registrados_desde_ultima_compra
+                + co.dias_hasta_orden_objetivo)
+                / NULLIF(cp.cadencia_par, 0)     AS vencimiento,
+
+            cp.cadencia_par,
+
+            -- Lo mismo pero contra el ritmo general de compra de la persona,
+            -- no del producto.
+            (i.dias_registrados_desde_ultima_compra
+                + co.dias_hasta_orden_objetivo)
+                / NULLIF(u.mediana_dias_entre_ordenes_historicas, 0)
+                                                AS ciclos_totales,
+
             COALESCE(e.etiqueta, 0)             AS etiqueta
 
         FROM '{sql_path(PROCESSED_DIR / "interacciones.parquet")}' AS i
@@ -164,6 +255,9 @@ def construir(con: duckdb.DuckDBPyConnection, limite: int | None) -> None:
             ON u.user_id = i.user_id
         INNER JOIN '{sql_path(PROCESSED_DIR / "productos.parquet")}' AS pr
             ON pr.product_id = i.product_id
+        INNER JOIN contexto_objetivo AS co     USING (user_id)
+        LEFT JOIN cadencia_par AS cp
+            ON cp.user_id = i.user_id AND cp.product_id = i.product_id
         LEFT JOIN etiquetas AS e
             ON e.user_id = i.user_id AND e.product_id = i.product_id;
     """)
