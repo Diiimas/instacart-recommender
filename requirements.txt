@@ -15,11 +15,26 @@ duckdb==1.5.5
 pandas==2.3.3
 numpy==2.2.6
 
+# Motor de Parquet para Pandas.
+# No aparece en ningún import del código: lo carga Pandas por dentro cuando se
+# llama a read_parquet(). El pipeline lee los Parquet con DuckDB y no lo
+# necesita, pero los scripts de src/models y src/features los leen con Pandas
+# y sin esto fallan en un entorno limpio.
+pyarrow==23.0.1
+
 # Visualización
 matplotlib==3.10.9
 
 # Ejecución de notebooks en VSCode/Jupyter
 ipykernel==7.3.0
+
+# Modelado (carpeta src/models/)
+scikit-learn==1.8.0
+lightgbm==4.6.0
+optuna==4.8.0
+
+# Tests (carpeta tests/)
+pytest==8.4.2
 
 # Herramientas opcionales para ejecutar o convertir notebooks por consola
 # jupyter==1.1.1
