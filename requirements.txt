@@ -24,6 +24,7 @@ ipykernel==7.3.0
 # Modelado (carpeta src/models/)
 scikit-learn==1.8.0
 lightgbm==4.6.0
+optuna==4.8.0
 
 # Tests (carpeta tests/)
 pytest==8.4.2
