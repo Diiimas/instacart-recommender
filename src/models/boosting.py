@@ -27,6 +27,7 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 from pathlib import Path
@@ -51,12 +52,47 @@ K = 10
 SEMILLA = 42
 TECHOS = {"heavy": 0.6596, "medio": 0.5491, "nuevo": 0.4443}
 
+# Elegidos a ojo, razonables, sin haber buscado nada. Son la referencia contra
+# la que se compara cualquier ajuste.
+PARAMS_POR_DEFECTO = {
+    "learning_rate": 0.05,
+    "num_leaves": 63,
+    "min_child_samples": 200,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+}
+
+ARCHIVO_PARAMS = REPORTS_DIR / "mejores_parametros_lightgbm.json"
+
+
+def cargar_parametros(usar_ajuste: bool = True) -> tuple[dict, str]:
+    """
+    Devuelve los parametros a usar y de donde salieron.
+
+    Si existe el archivo que deja src/models/tuning.py, se usan esos. Si no,
+    los de por defecto. Se lee del archivo en vez de copiarlos a mano para que
+    no haya dos versiones de los mismos numeros dando vueltas, que es como
+    empiezan las tablas que no se corresponden con el codigo.
+
+    Devuelve tambien la procedencia, y todas las corridas la imprimen: si un
+    resultado no se puede reproducir, lo primero que hay que saber es con que
+    parametros salio.
+    """
+    if usar_ajuste and ARCHIVO_PARAMS.exists():
+        datos = json.loads(ARCHIVO_PARAMS.read_text(encoding="utf-8"))
+        intentos = datos.get("intentos", "?")
+        return dict(datos["params"]), f"ajustados con Optuna, {intentos} intentos"
+    return dict(PARAMS_POR_DEFECTO), "por defecto, sin ajustar"
+
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--muestra", type=int, default=None)
     p.add_argument("--arboles", type=int, default=600)
     p.add_argument("--k", type=int, default=K)
+    p.add_argument("--sin-ajuste", action="store_true",
+                   help="Ignora los parametros de Optuna y usa los de por "
+                        "defecto. Sirve para medir cuanto aporto el ajuste.")
     return p.parse_args()
 
 
@@ -81,7 +117,8 @@ def cortar_para_early_stopping(train: pd.DataFrame, proporcion: float = 0.10):
     return train[es_ajuste], train[~es_ajuste]
 
 
-def entrenar(train: pd.DataFrame, valid: pd.DataFrame, arboles: int = 600):
+def entrenar(train: pd.DataFrame, valid: pd.DataFrame, arboles: int = 600,
+             params: dict | None = None, usar_ajuste: bool = True):
     """
     Ajusta el modelo con `train` y devuelve la probabilidad de cada fila de
     `valid`, junto con el modelo.
@@ -90,19 +127,19 @@ def entrenar(train: pd.DataFrame, valid: pd.DataFrame, arboles: int = 600):
     script de comparacion entrene exactamente este modelo y no una copia que
     pueda irse separando.
     """
+    if params is None:
+        params, origen = cargar_parametros(usar_ajuste)
+        print(f"  parametros: {origen}")
+
     ajuste, freno = cortar_para_early_stopping(train)
 
     modelo = lgb.LGBMClassifier(
         n_estimators=arboles,
-        learning_rate=0.05,
-        num_leaves=63,
-        min_child_samples=200,
-        subsample=0.8,
         subsample_freq=1,
-        colsample_bytree=0.8,
         random_state=SEMILLA,
         n_jobs=4,
         verbose=-1,
+        **params,
     )
     modelo.fit(
         ajuste[VARIABLES], ajuste["etiqueta"],
@@ -135,7 +172,8 @@ def main() -> None:
 
     print("\nEntrenando...")
     t1 = time.time()
-    p_valid, modelo = entrenar(train, valid, args.arboles)
+    p_valid, modelo = entrenar(train, valid, args.arboles,
+                               usar_ajuste=not args.sin_ajuste)
     print(f"  listo en {time.time() - t1:.0f} s "
           f"con {modelo.best_iteration_} arboles de {args.arboles}")
 

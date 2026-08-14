@@ -1,0 +1,16 @@
+{
+  "params": {
+    "learning_rate": 0.06017761665213941,
+    "num_leaves": 45,
+    "min_child_samples": 466,
+    "subsample": 0.9100531293444458,
+    "colsample_bytree": 0.9697494707820946,
+    "reg_lambda": 3.7958531426706403
+  },
+  "recall_tuning": 0.3582043768887462,
+  "recall_tuning_referencia": 0.35749419107001984,
+  "arboles": 452,
+  "intentos": 30,
+  "medido_sobre": "split de tuning, 10% de entrenamiento",
+  "nota": "Estos numeros son del split de tuning, NO de validacion. El resultado final se mide corriendo comparar_todos.py."
+}
