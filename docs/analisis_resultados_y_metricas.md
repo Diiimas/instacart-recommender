@@ -5,6 +5,8 @@
 Propuesta para acordar entre todos cómo leemos y nombramos la evaluación. Se apoya en los
 resultados que ya midieron Julieta (protocolo + baselines) y Dimas (candidatos).
 
+> **Universos (importante):** las métricas de rendimiento (Hit Rate, Recall, lift) se calculan sobre los **26.243 usuarios de validación**; el análisis de features y segmentos del EDA, sobre los **131.209 usuarios evaluables**. Son universos distintos, a propósito.
+
 ## 1. Lectura de los resultados del baseline (recompra personal)
 
 | Métrica | Valor | Lectura |
@@ -69,3 +71,9 @@ secas — si mostramos uno con el nombre del otro, nos equivocamos por hasta 6×
 Tomar 3–5 usuarios ejemplo (1 nuevo, 1 medio, 1 heavy) y mostrar su Top-10 de recompra vs. los
 candidatos, marcando si el target real cayó adentro. Valida que las recomendaciones tienen sentido
 de negocio, no solo que la métrica da bien.
+
+## 7. Limitaciones y oportunidades (para Sprint 2)
+
+- El dataset es de **recompra**: el descubrimiento es inherentemente limitado (Hit Rate de novedad 14 %). No es una falla del modelo, es la naturaleza del dato — por eso se mide y se comunica aparte.
+- **Oportunidad:** formalizar la métrica de novedad en `src/evaluation/metrics.py` (hoy sale de la evaluación de candidatos, por separado) y mejorar el generador de candidatos, que concentra el Top-10 en 531 productos.
+- El protocolo (split temporal, sin fuga) y las métricas ya están unificadas en el módulo común de evaluación.
