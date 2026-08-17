@@ -5,7 +5,7 @@
 Propuesta para acordar entre todos cómo leemos y nombramos la evaluación. Se apoya en los
 resultados que ya midieron Julieta (protocolo + baselines) y Dimas (candidatos).
 
-> **Universos (importante):** las métricas de rendimiento (Hit Rate, Recall, lift) se calculan sobre los **26.243 usuarios de validación**; el análisis de features y segmentos del EDA, sobre los **131.209 usuarios evaluables**. Son universos distintos, a propósito.
+> **Universos (importante):** los valores de baseline y candidatos de este documento (Recall, Hit Rate, cobertura 71,9 %) corresponden a los **131.209 usuarios evaluables**, igual que el análisis de features y segmentos del EDA. La **comparación oficial entre modelos** (LightGBM vs. baselines) se realiza sobre los **26.243 usuarios de validación** — donde, por ejemplo, la cobertura de recompra es ~**44,9 %**. Son universos distintos, a propósito.
 
 ## 1. Lectura de los resultados del baseline (recompra personal)
 
@@ -16,6 +16,8 @@ resultados que ya midieron Julieta (protocolo + baselines) y Dimas (candidatos).
 | Recall@10 micro | 0,261 | capturamos el 26 % de todos los productos vendidos |
 | Popularidad (Recall / Hit Rate) | 7 % / 45,8 % | mismos aciertos, distinto nombre |
 
+*Valores sobre los **131.209 usuarios evaluables**. La comparación oficial entre modelos (cobertura de recompra ~44,9 %) se realiza sobre los **26.243 de validación** — ver `comparacion_final.csv` / dashboard.*
+
 **Interpretación:** el baseline de recompra es fortísimo en repetición y difícil de superar ahí
 —exactamente lo que anticipaba el EDA (sesgo de popularidad + recompra alta)—. El margen de un
 modelo que rankee mejor está en **heavy y medio** (la recompra captura el 51 % de lo alcanzable en
@@ -24,7 +26,7 @@ heavy vs. 71 % en nuevos), ~93.000 de los 131.209 evaluables. A los **nuevos** l
 
 ## 2. Por qué la cobertura NO valida "descubrimiento"
 
-La recompra personal cubre el **71,9 % del catálogo** pero tiene **descubrimiento cero por
+La recompra personal cubre el **71,9 % del catálogo** (sobre los 131.209 evaluables; en validación, ~44,9 %) pero tiene **descubrimiento cero por
 construcción**: nunca recomienda algo fuera del historial del usuario. Cubre mucho solo porque cada
 persona recibe *sus* productos. Conclusión: la cobertura mide **amplitud del catálogo tocado**, no
 capacidad de descubrimiento. Usarla para la historia de descubrimiento nos engaña.
@@ -74,6 +76,6 @@ de negocio, no solo que la métrica da bien.
 
 ## 7. Limitaciones y oportunidades (para Sprint 2)
 
-- El dataset es de **recompra**: el descubrimiento es inherentemente limitado (Hit Rate de novedad 14 %). No es una falla del modelo, es la naturaleza del dato — por eso se mide y se comunica aparte.
+- El dataset es de **recompra**: la naturaleza de los datos **dificulta** el descubrimiento, y el **generador actual** alcanza un Hit Rate de novedad de **14,24 %** — es el resultado del generador de hoy, no un límite demostrado del dataset. Por eso el descubrimiento se mide y se comunica aparte.
 - **Oportunidad:** formalizar la métrica de novedad en `src/evaluation/metrics.py` (hoy sale de la evaluación de candidatos, por separado) y mejorar el generador de candidatos, que concentra el Top-10 en 531 productos.
 - El protocolo (split temporal, sin fuga) y las métricas ya están unificadas en el módulo común de evaluación.
