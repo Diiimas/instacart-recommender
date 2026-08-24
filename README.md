@@ -1,10 +1,30 @@
-# Instacart Recommender
+<p align="center">
+  <img
+    src="assets/basket_analytics_banner.png"
+    alt="Basket Analytics"
+    width="100%"
+  >
+</p>
 
-[![Python](https://img.shields.io/badge/Python-3.12.10-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![DuckDB](https://img.shields.io/badge/DuckDB-1.5.5-FFF000?logo=duckdb&logoColor=000000)](https://duckdb.org/)
-[![LightGBM](https://img.shields.io/badge/model-LightGBM-2E8B57)](https://lightgbm.readthedocs.io/)
-[![Tests](https://img.shields.io/badge/tests-32%20passed-brightgreen)](tests/test_metrics.py)
-[![Status](https://img.shields.io/badge/status-Sprint%202-blue)](#estado-del-proyecto)
+<h1 align="center">Instacart Recommender</h1>
+
+<p align="center">
+  <a href="https://www.python.org/">
+    <img src="https://img.shields.io/badge/Python-3.12.10-3776AB?logo=python&logoColor=white" alt="Python 3.12.10">
+  </a>
+  <a href="https://duckdb.org/">
+    <img src="https://img.shields.io/badge/DuckDB-1.5.5-FFF000?logo=duckdb&logoColor=000000" alt="DuckDB 1.5.5">
+  </a>
+  <a href="https://lightgbm.readthedocs.io/">
+    <img src="https://img.shields.io/badge/model-LightGBM-2E8B57" alt="Modelo LightGBM">
+  </a>
+  <a href="tests/test_metrics.py">
+    <img src="https://img.shields.io/badge/tests-32%20passed-brightgreen" alt="32 pruebas aprobadas">
+  </a>
+  <a href="#estado-del-proyecto">
+    <img src="https://img.shields.io/badge/status-Sprint%202-blue" alt="Estado Sprint 2">
+  </a>
+</p>
 
 Sistema de recomendación **Top-10** desarrollado sobre el historial de compras de Instacart. El proyecto integra procesamiento reproducible, análisis exploratorio, ingeniería de características, modelado supervisado y evaluación offline bajo un protocolo temporal sin fuga de información.
 
