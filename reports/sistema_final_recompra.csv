@@ -1,0 +1,4 @@
+segmento,n_usuarios,hit_rate,recall
+heavy,8323,0.9111,0.3814
+medio,10304,0.8717,0.3558
+nuevo,7616,0.8298,0.3271

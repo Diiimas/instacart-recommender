@@ -1,0 +1,4 @@
+segmento,lugares,n_usuarios,precision_novedad,hit_rate_novedad,aciertos_nuevos
+nuevo,5,7616,0.033,0.1648,1247
+medio,2,10304,0.0279,0.0656,573
+heavy,1,8323,0.0173,0.0234,144
