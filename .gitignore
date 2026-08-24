@@ -53,3 +53,8 @@ htmlcov/
 build/
 dist/
 *.egg-info/
+# Reglas de asociacion: artefactos derivados de varios MB. Se regeneran en
+# menos de un minuto con `python src/models/reglas_asociacion.py`, asi que no
+# tiene sentido versionarlos ni revisarlos en un pull request.
+reports/reglas_asociacion.csv
+reports/reglas_asociacion_pasillos.csv
