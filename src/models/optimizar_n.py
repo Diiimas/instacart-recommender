@@ -122,6 +122,12 @@ def main() -> None:
         for seg, m in det["segmentos"].items():
             fila[f"recall_{seg}"] = m["recall"]
             fila[f"pct_techo_{seg}"] = m["recall"] / techos.loc[n, f"techo_{seg}"]
+            # F1 por segmento: es lo unico que puede decidir si a un segmento
+            # le conviene un carrito distinto. El % del techo sube siempre con
+            # N, igual que el recall, asi que solo mirarlo llevaria a darle el
+            # carrito mas grande a todos.
+            p_, r_ = m["precision"], m["recall"]
+            fila[f"f1_{seg}"] = 2 * p_ * r_ / (p_ + r_) if (p_ + r_) else 0.0
         filas.append(fila)
         print(f"  N={n:>2} listo")
 
@@ -154,6 +160,29 @@ def main() -> None:
     print("\nPorcentaje del techo capturado, por segmento")
     cols = ["n"] + [c for c in tabla.columns if c.startswith("pct_techo_")]
     print(tabla[cols].round(4).to_string(index=False))
+
+    # ----------------------------------------------------------------------
+    # La pregunta que decide si conviene un carrito distinto por segmento.
+    # El % del techo sube siempre con N: mirarlo solo llevaria a darle 30
+    # lugares a todo el mundo. El F1 por segmento es el que puede tener su
+    # maximo en un N distinto para cada uno.
+    # ----------------------------------------------------------------------
+    print("\n" + "=" * 66)
+    print("EL N OPTIMO ES EL MISMO PARA TODOS LOS SEGMENTOS?")
+    print("=" * 66)
+    cols_f1 = [c for c in tabla.columns if c.startswith("f1_")]
+    print(tabla[["n"] + cols_f1].round(4).to_string(index=False))
+
+    print()
+    for col in cols_f1:
+        seg = col[3:]
+        mejor = tabla.loc[tabla[col].idxmax()]
+        n_mejor = int(mejor["n"])
+        # Cuanto se pierde en ese segmento por usar 10 en vez de su optimo.
+        en_diez = tabla.loc[tabla["n"] == 10, col]
+        perdida = (mejor[col] - en_diez.iloc[0]) if len(en_diez) else float("nan")
+        print(f"  {seg:<10} mejor N = {n_mejor:>2}  (F1 {mejor[col]:.4f})"
+              f"   contra N=10 gana {perdida:+.4f}")
 
     REPORTS_DIR.mkdir(exist_ok=True)
     salida = REPORTS_DIR / "optimizacion_n.csv"
