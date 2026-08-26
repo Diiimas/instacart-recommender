@@ -44,7 +44,63 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--valores", type=int, nargs="+", default=VALORES_N,
                    help="Valores de N a evaluar.")
+    p.add_argument("--semillas", type=int, nargs="+", default=None,
+                   help="Repite con varias semillas para separar la senal "
+                        "del ruido entre corridas. Las diferencias entre N "
+                        "vecinos son de milesimas, asi que una sola corrida "
+                        "no alcanza para afirmar cual gana.")
     return p.parse_args()
+
+
+def robustez(train, valid, verdad, valores, semillas):
+    """
+    Repite la medicion con varias semillas y compara la ventaja con el ruido.
+
+    La semilla cambia dos cosas: que usuarios caen en el pedazo de
+    entrenamiento que decide cuando frenar, y el muestreo interno del modelo.
+    Si el ganador cambia al cambiarla, no habia ganador.
+    """
+    from src.models import boosting as _b
+
+    filas = []
+    original = _b.SEMILLA
+    try:
+        for s in semillas:
+            _b.SEMILLA = s
+            print(f"  semilla {s}...")
+            p, _ = _b.entrenar(train, valid)
+            for n in valores:
+                m = evaluar(recomendar(valid, p, n), verdad, k=n)
+                pr, rc = m["precision"], m["recall"]
+                filas.append({"semilla": s, "n": n,
+                              "f1": 2 * pr * rc / (pr + rc) if (pr + rc) else 0.0})
+    finally:
+        _b.SEMILLA = original
+
+    t = pd.DataFrame(filas)
+    resumen = t.groupby("n")["f1"].agg(["mean", "std"]).round(5)
+    print("\n" + "=" * 66)
+    print("ROBUSTEZ: EL GANADOR AGUANTA UN CAMBIO DE SEMILLA?")
+    print("=" * 66)
+    print(t.pivot(index="semilla", columns="n", values="f1").round(4).to_string())
+    print("\n" + resumen.to_string())
+
+    ganadores = {int(t[t["semilla"] == s]["f1"].idxmax() and
+                     t.loc[t[t["semilla"] == s]["f1"].idxmax(), "n"])
+                 for s in semillas}
+    mejor = int(resumen["mean"].idxmax())
+    rival = resumen.drop(index=mejor)["mean"].max()
+    ventaja = resumen.loc[mejor, "mean"] - rival
+    ruido = float(t.groupby("n")["f1"].std().max())
+
+    print(f"\n  gana en cada semilla: {sorted(ganadores)}")
+    print(f"  ventaja de N={mejor} sobre su mejor rival: {ventaja:+.5f}")
+    print(f"  desvio entre semillas (el ruido):          {ruido:.5f}")
+    if len(ganadores) == 1 and ventaja > ruido:
+        print(f"  -> N={mejor} se sostiene: gana siempre y por mas que el ruido.")
+    else:
+        print("  -> la ventaja no supera al ruido: son equivalentes.")
+    return t
 
 
 def techos_por_n(usuarios: set[int], valores: list[int],
@@ -183,6 +239,10 @@ def main() -> None:
         perdida = (mejor[col] - en_diez.iloc[0]) if len(en_diez) else float("nan")
         print(f"  {seg:<10} mejor N = {n_mejor:>2}  (F1 {mejor[col]:.4f})"
               f"   contra N=10 gana {perdida:+.4f}")
+
+    if args.semillas:
+        t_rob = robustez(train, valid, verdad, valores, args.semillas)
+        t_rob.to_csv(REPORTS_DIR / "optimizacion_n_robustez.csv", index=False)
 
     REPORTS_DIR.mkdir(exist_ok=True)
     salida = REPORTS_DIR / "optimizacion_n.csv"
