@@ -138,3 +138,39 @@ def test_usuario_sin_historial_no_recibe_sugerencias():
     r = recomendar_usuario(RANKING, set(), "nuevo", REGLAS,
                            politica={"nuevo": 5})
     assert r["sugerencias"] == []
+
+
+# --------------------------------------------------------------------------
+# Los tamanos son MAXIMOS, no cantidades fijas
+#
+# Lo senalo Dimas revisando el PR #8: la documentacion decia "10 productos" y
+# "5 sugerencias", pero los dos bloques pueden venir cortos. El 6,2% de los
+# usuarios recibe menos de 10 principales, y el 14,3% entre los nuevos. Si la
+# interfaz asume que siempre vienen completos, se rompe con esos.
+# --------------------------------------------------------------------------
+def test_el_bloque_principal_puede_venir_corto():
+    # Un usuario con solo 3 productos en su historial no puede recibir 10.
+    r = recomendar_usuario([1, 2, 3], {1, 2, 3}, "nuevo", REGLAS,
+                           politica={"nuevo": 2})
+    assert len(r["principales"]) == 3
+
+
+def test_el_bloque_de_sugerencias_puede_venir_corto():
+    # Su historial dispara 3 candidatos, pero la politica pide 5.
+    r = recomendar_usuario(RANKING, HISTORIAL, "nuevo", REGLAS,
+                           politica={"nuevo": 5})
+    assert len(r["sugerencias"]) == 3
+    assert len(r["sugerencias"]) < 5
+
+
+def test_todo_segmento_con_candidatas_recibe_al_menos_una():
+    # Regla explicita de producto: el piso de precision gobierna cuantas
+    # AGREGAR, no si mostrar alguna. El heavy recibe una aunque su primera
+    # posicion rinda 1,7%, por debajo del piso del 2,5%.
+    from src.models.recommender import POLITICA_NOVEDAD
+    for segmento, cuantas in POLITICA_NOVEDAD.items():
+        assert cuantas >= 1, (
+            f"{segmento} quedo en 0. Si es intencional hay que cambiar este "
+            "test y documentarlo: implica que ese segmento no ve nunca la "
+            "seccion de sugerencias."
+        )

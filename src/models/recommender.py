@@ -8,13 +8,21 @@ cliente. Este modulo implementa esa decision.
 
 Devuelve dos listas, no una:
 
-  principales   Top-K de recompra. Sale del ranking de LightGBM sobre el
-                historial del usuario. Es donde vive el KPI del proyecto y
-                NO se toca: la novedad ya no le saca lugares.
+  principales   HASTA K productos de recompra. Sale del ranking de LightGBM
+                sobre el historial del usuario. Es donde vive el KPI del
+                proyecto y NO se toca: la novedad ya no le saca lugares.
 
-  sugerencias   Bloque de descubrimiento. Productos que la persona nunca
-                compro, disparados por reglas de asociacion sobre lo que si
-                compra. Se muestra aparte, tipo "tambien podrias necesitar".
+  sugerencias   HASTA N productos de descubrimiento, con N segun el segmento.
+                Productos que la persona nunca compro, disparados por reglas
+                de asociacion sobre lo que si compra. Se muestra aparte, tipo
+                "tambien podrias necesitar".
+
+Los dos bloques devuelven HASTA esa cantidad, no exactamente esa cantidad.
+El principal queda corto cuando el usuario no tiene suficiente historial que
+rankear: le pasa al 6,2% de los usuarios, y al 14,3% entre los nuevos. El de
+sugerencias queda corto cuando su historial no dispara suficientes reglas.
+Quien muestre esto en una interfaz tiene que contemplar bloques incompletos,
+y comunicarlo como "hasta 10" y "hasta 5".
 
 Por que dos bloques y no uno mezclado
 -------------------------------------
@@ -48,20 +56,32 @@ REPORTS_DIR = PROJECT_ROOT / "reports"
 
 K_PRINCIPALES = 10
 
-# Cuantas sugerencias de novedad recibe cada segmento.
+# Cuantas sugerencias de novedad recibe cada segmento, COMO MAXIMO.
 #
 # Con el bloque aparte no hay un corte que los datos impongan: la precision
-# del bloque baja de a poco y no se derrumba, asi que no hay un punto obvio
-# donde parar. El criterio que se uso es un piso de precision marginal del
-# 2,5%: se agregan lugares mientras el ULTIMO todavia acierte al menos eso.
+# baja de a poco y no se derrumba, asi que el criterio es de producto. La
+# regla tiene dos partes, y las dos hacen falta:
 #
-#   nuevo   lugares 1 a 5 rinden 4,5 / 3,6 / 2,9 / 2,8 / 2,7 %  -> entran 5
-#   medio   lugares 1 a 3 rinden 3,0 / 2,5 / 2,1 %              -> entran 2
-#   heavy   el primer lugar ya rinde 1,7 %                      -> entra 1
+#   1. Todos los segmentos reciben al menos UNA sugerencia, si hay candidata.
+#   2. Se agregan lugares mientras el ULTIMO todavia acierte al menos el
+#      2,5% de las veces.
 #
-# El piso es una decision de producto, no de datos: define cuanta
-# irrelevancia se tolera mostrar. Si el negocio prefiere un bloque mas
-# generoso, se sube el numero y listo; el modulo no asume nada.
+#   nuevo   lugares 1 a 5 rinden 4,5 / 3,6 / 2,9 / 2,8 / 2,7 %  -> 5
+#   medio   lugares 1 a 3 rinden 3,0 / 2,5 / 2,1 %              -> 2
+#   heavy   el primer lugar rinde 1,7 %, debajo del piso        -> 1 por (1)
+#
+# La primera parte existe porque el piso gobierna cuantos AGREGAR, no si
+# mostrar alguno. Al heavy le mostramos uno solo aunque rinda 1,7%: en un
+# bloque aparte no le saca lugar a nada, un solo item no satura la interfaz,
+# y aporta 144 aciertos que de otro modo no existirian. Sin esta regla
+# explicita, el heavy -que es el 32% de los clientes- no veria nunca la
+# seccion, y eso es una decision de producto demasiado grande para que quede
+# implicita en un umbral.
+#
+# Son MAXIMOS, no cantidades fijas: un usuario cuyo historial no dispare
+# suficientes reglas recibe menos. Hoy le pasa al 1,6% de los nuevos, al
+# 0,2% de los medios y al 0,04% de los heavy. En la interfaz hay que
+# comunicar "hasta 5" y no "5".
 POLITICA_NOVEDAD = {
     "nuevo": 5,
     "medio": 2,
