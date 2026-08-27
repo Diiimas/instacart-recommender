@@ -1,0 +1,8 @@
+metrica,valor,formato,descripcion
+Hit Rate,0.8720420683610868,porcentaje,"De cada 100 clientes, a cuantos les acertamos al menos un producto"
+Recall,0.35560439848626363,decimal,"Que parte del proximo pedido logramos capturar, en promedio"
+Precision,0.3025606828487597,decimal,"De los 10 que recomendamos, que proporcion acerto"
+Cobertura,0.38973192722588956,porcentaje,Que parte del catalogo llega a recomendarse
+Hit Rate en novedad,0.0845031012451616,porcentaje,"De los clientes que compraron algo nuevo, a cuantos les acertamos al menos un producto nuevo"
+Aciertos de descubrimiento,1964.0,entero,"Productos nuevos acertados, sin resignar ninguno de recompra"
+Usuarios evaluados,26243.0,entero,"Todos los de validacion, los mismos para los cinco sistemas"

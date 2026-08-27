@@ -63,6 +63,23 @@ descarta:
                       negocio
   usuarios_completos  "proporcion de usuarios con diez recomendaciones
                       validas", propuesta en el README
+
+Bloque de NOVEDAD (opcional, requiere pasar `historial`). Todas las metricas
+de arriba tratan igual a un producto que la persona compra siempre y a uno
+que nunca compro, y para el negocio son cosas distintas: una reconstruye el
+carrito y la otra lo agranda. Estas cuatro separan esa mitad del problema:
+
+  novedad_ofrecida    que proporcion de los K lugares dedicamos a productos
+                      fuera del historial del usuario. Es una decision de
+                      diseno nuestra, no un resultado
+  precision_novedad   de lo nuevo que ofrecimos, cuanto acerto
+  recall_novedad      de lo nuevo que la persona compro, cuanto anticipamos
+  hit_rate_novedad    a cuantos usuarios les acertamos al menos un producto
+                      nuevo. Es el comparable con el 14% del Sprint 1
+
+Nunca promediar novedad con recompra ni ponerlas en la misma escala: acertar
+lo que alguien nunca compro es un problema mucho mas dificil y sus numeros
+son de otro orden. Se reportan separadas a proposito.
 """
 from __future__ import annotations
 
@@ -95,6 +112,55 @@ def recall_en_k(recomendados: list[int], reales: set[int], k: int) -> float:
 def acerto(recomendados: list[int], reales: set[int], k: int) -> bool:
     """Si le acertamos al menos uno. Es la condicion del KPI de negocio."""
     return aciertos(recomendados, reales, k) > 0
+
+
+# --------------------------------------------------------------------------
+# Novedad
+#
+# Todo lo de arriba mide RECOMPRA: no distingue entre acertarle un producto
+# que la persona compra siempre y uno que nunca compro. Para el negocio son
+# cosas distintas: el primero reconstruye el carrito, el segundo lo agranda.
+#
+# Estas funciones necesitan un dato que las anteriores no usan: el historial
+# de cada usuario. Un producto es NUEVO para alguien si no esta en su
+# historial. Es una definicion por usuario, no por catalogo: la banana es
+# nueva para quien nunca la compro, por mas que sea el producto mas vendido.
+#
+# Novedad NO es cobertura. La cobertura mira cuanto catalogo usamos sumando
+# a todos los clientes; la novedad mira, para cada persona, cuanto de lo que
+# le mostramos no conocia. Un sistema puede tener cobertura alta y novedad
+# cero: alcanza con recomendarle a cada uno sus propios productos raros.
+# --------------------------------------------------------------------------
+def nuevos_recomendados(recomendados: list[int], historial: set[int],
+                        k: int) -> set[int]:
+    """De los primeros K, cuales no estaban en el historial del usuario."""
+    return set(recomendados[:k]) - historial
+
+
+def novedad_ofrecida(recomendados: list[int], historial: set[int],
+                     k: int) -> float:
+    """
+    Que proporcion de los K lugares dedicamos a productos que no conoce.
+
+    Divide por K y no por lo entregado, igual que precision: si dejamos
+    lugares vacios, la novedad no sube por no haber ofrecido nada.
+
+    Es una metrica de DISEnO, no de rendimiento: mide lo que decidimos
+    mostrar, no si acertamos. Hoy da 0 porque el recomendador solo rankea
+    productos del historial. Ese cero es informacion, no un error.
+    """
+    return len(nuevos_recomendados(recomendados, historial, k)) / k
+
+
+def objetivos_nuevos(reales: set[int], historial: set[int]) -> set[int]:
+    """Que compro esta vez que nunca habia comprado. El techo de la novedad."""
+    return reales - historial
+
+
+def aciertos_nuevos(recomendados: list[int], reales: set[int],
+                    historial: set[int], k: int) -> int:
+    """Cuantos productos nuevos le recomendamos que efectivamente compro."""
+    return len(nuevos_recomendados(recomendados, historial, k) & reales)
 
 
 # --------------------------------------------------------------------------
@@ -168,12 +234,85 @@ def _metricas(usuarios: list[int],
     }
 
 
+def _metricas_novedad(usuarios: list[int],
+                      recomendaciones: dict[int, list[int]],
+                      verdad: dict[int, set[int]],
+                      historial: dict[int, set[int]],
+                      k: int) -> dict:
+    """
+    Bloque de novedad. Tres numeros con TRES DENOMINADORES DISTINTOS.
+
+    Que sean distintos no es un descuido: cada uno responde una pregunta que
+    solo tiene sentido sobre su propio subconjunto de usuarios.
+
+      novedad_ofrecida   sobre TODOS los usuarios. Cuanto del carrito
+                         dedicamos a lo desconocido. Es la perilla que
+                         movemos nosotros.
+      precision_novedad  sobre los usuarios A QUIENES LE OFRECIMOS algo
+                         nuevo. De eso que arriesgamos, cuanto pego. No
+                         esta definida para quien no recibio nada nuevo.
+      recall_novedad     sobre los usuarios que COMPRARON algo nuevo. De lo
+                         nuevo que efectivamente compro, cuanto anticipamos.
+                         No esta definida para quien no compro nada nuevo.
+      hit_rate_novedad   sobre los mismos que recall_novedad. A cuantos les
+                         acertamos al menos un producto nuevo. Es el numero
+                         comparable con el 14% que reporto el Sprint 1.
+
+    Se devuelve el n de cada uno junto al valor. Sin eso, comparar dos
+    corridas es adivinar: un promedio sobre 200 usuarios y otro sobre 26.000
+    no se leen igual.
+    """
+    if not usuarios:
+        return {"novedad_ofrecida": 0.0, "precision_novedad": 0.0,
+                "recall_novedad": 0.0, "hit_rate_novedad": 0.0,
+                "n_con_novedad_ofrecida": 0, "n_con_objetivo_nuevo": 0,
+                "aciertos_nuevos_totales": 0, "objetivos_nuevos_totales": 0}
+
+    ofrecidas, precisiones, recalls = [], [], []
+    hits_nuevos = 0
+    aciertos_nuevos_totales, objetivos_nuevos_totales = 0, 0
+
+    for u in usuarios:
+        recs = recomendaciones.get(u, [])
+        reales = verdad[u]
+        hist = historial.get(u, set())
+
+        nuevos_recs = nuevos_recomendados(recs, hist, k)
+        nuevos_obj = objetivos_nuevos(reales, hist)
+        pegados = len(nuevos_recs & reales)
+
+        aciertos_nuevos_totales += pegados
+        objetivos_nuevos_totales += len(nuevos_obj)
+        ofrecidas.append(len(nuevos_recs) / k)
+
+        if nuevos_recs:
+            precisiones.append(pegados / len(nuevos_recs))
+        if nuevos_obj:
+            recalls.append(pegados / len(nuevos_obj))
+            if pegados > 0:
+                hits_nuevos += 1
+
+    n_obj_nuevo = len(recalls)
+    return {
+        "novedad_ofrecida": sum(ofrecidas) / len(usuarios),
+        "precision_novedad": (sum(precisiones) / len(precisiones)
+                              if precisiones else 0.0),
+        "recall_novedad": (sum(recalls) / n_obj_nuevo if n_obj_nuevo else 0.0),
+        "hit_rate_novedad": (hits_nuevos / n_obj_nuevo if n_obj_nuevo else 0.0),
+        "n_con_novedad_ofrecida": len(precisiones),
+        "n_con_objetivo_nuevo": n_obj_nuevo,
+        "aciertos_nuevos_totales": aciertos_nuevos_totales,
+        "objetivos_nuevos_totales": objetivos_nuevos_totales,
+    }
+
+
 def evaluar(recomendaciones: dict[int, list[int]],
             verdad: dict[int, set[int]],
             k: int = 10,
             segmentos: dict[int, str] | None = None,
             tamano_catalogo: int = CATALOGO_INSTACART,
-            estricto: bool = True) -> dict:
+            estricto: bool = True,
+            historial: dict[int, set[int]] | None = None) -> dict:
     """
     Evalua un conjunto de recomendaciones contra la orden real de cada usuario.
 
@@ -188,10 +327,15 @@ def evaluar(recomendaciones: dict[int, list[int]],
     tamano_catalogo : denominador de la cobertura.
     estricto        : si True, falla cuando un usuario de `verdad` no tiene
                       recomendaciones. Ver nota abajo.
+    historial       : {user_id: {product_id, ...}} lo que cada usuario compro
+                      ANTES de la orden objetivo. Opcional. Si se pasa, agrega
+                      el bloque "novedad". Un usuario que no aparece se trata
+                      como sin historial, o sea que todo le es nuevo.
 
     Devuelve
     --------
-    dict con las metricas globales y, si corresponde, la clave "segmentos".
+    dict con las metricas globales y, si corresponde, las claves "segmentos"
+    y "novedad".
 
     Sobre `estricto`
     ----------------
@@ -223,6 +367,11 @@ def evaluar(recomendaciones: dict[int, list[int]],
     resultado["k"] = k
     resultado["sin_recomendaciones"] = len(sin_recomendaciones)
 
+    if historial is not None:
+        resultado["novedad"] = _metricas_novedad(
+            usuarios, recomendaciones, verdad, historial, k
+        )
+
     if segmentos:
         por_segmento = {}
         for nombre in sorted({segmentos[u] for u in usuarios if u in segmentos}):
@@ -230,6 +379,10 @@ def evaluar(recomendaciones: dict[int, list[int]],
             por_segmento[nombre] = _metricas(
                 del_segmento, recomendaciones, verdad, k, tamano_catalogo
             )
+            if historial is not None:
+                por_segmento[nombre]["novedad"] = _metricas_novedad(
+                    del_segmento, recomendaciones, verdad, historial, k
+                )
         resultado["segmentos"] = por_segmento
 
         sin_segmento = [u for u in usuarios if u not in segmentos]
@@ -341,6 +494,35 @@ def _autocomprobacion() -> None:
     print()
     print("Micro y macro difieren porque el usuario 2 pesa un tercio en el")
     print("macro y un sexto en el micro: compro un solo producto.")
+
+    # ----------------------------------------------------------------------
+    historial = {
+        1: {20, 40, 60},   # ya conocia 20, 40 y 60
+        2: {60, 70},
+        3: {1, 2},
+    }
+    n = evaluar(recomendaciones, verdad, k=5, tamano_catalogo=100,
+                historial=historial)["novedad"]
+
+    print()
+    print("Bloque de novedad, con el mismo ejemplo")
+    print(f"  novedad_ofrecida   {n['novedad_ofrecida']:.4f}   esperado 0.4667")
+    print(f"  precision_novedad  {n['precision_novedad']:.4f}   esperado 0.1111")
+    print(f"  recall_novedad     {n['recall_novedad']:.4f}   esperado 0.2500")
+    print(f"  hit_rate_novedad   {n['hit_rate_novedad']:.4f}   esperado 0.5000")
+    print()
+    print("Las cuentas:")
+    print("  nuevos recomendados  u1 {10,30,50}  u2 {80}  u3 {3,4,5}")
+    print("  objetivos nuevos     u1 {30,99}     u2 {}    u3 {100,200}")
+    print("  aciertos nuevos      u1 1           u2 0     u3 0")
+    print("  ofrecida  = (3/5 + 1/5 + 3/5) / 3 usuarios")
+    print("  precision = (1/3 + 0/1 + 0/3) / 3 con novedad ofrecida")
+    print("  recall    = (1/2 + 0/2) / 2 con objetivo nuevo  <- u2 no cuenta")
+    print("  hit_rate  = 1 usuario con acierto nuevo / 2 con objetivo nuevo")
+    print()
+    print("El usuario 2 queda fuera de recall y hit_rate porque no compro")
+    print("nada nuevo: no hay contra que medirlo. Por eso cada metrica")
+    print("reporta su propio n.")
 
 
 if __name__ == "__main__":

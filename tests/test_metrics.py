@@ -20,6 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.evaluation.metrics import (  # noqa: E402
     aciertos, precision_en_k, recall_en_k, acerto, evaluar, comparar,
+    nuevos_recomendados, novedad_ofrecida, objetivos_nuevos,
+    aciertos_nuevos,
 )
 
 
@@ -314,3 +316,108 @@ def test_comparar_rechaza_una_referencia_inexistente():
     with pytest.raises(ValueError, match="referencia"):
         comparar({"a": RECOMENDACIONES}, VERDAD, k=5,
                  referencia="no_existe", tamano_catalogo=100)
+
+
+# --------------------------------------------------------------------------
+# Novedad
+#
+# Mismo caso de referencia, mas un historial. Un producto es nuevo para un
+# usuario si no esta en SU historial, no si es raro en el catalogo.
+# --------------------------------------------------------------------------
+HISTORIAL = {
+    1: {20, 40, 60},
+    2: {60, 70},
+    3: {1, 2},
+}
+
+
+def test_nuevo_es_relativo_al_usuario_no_al_catalogo():
+    # El mismo producto 20: conocido para el usuario 1, nuevo para el 2.
+    assert 20 not in nuevos_recomendados([20, 99], HISTORIAL[1], 5)
+    assert 20 in nuevos_recomendados([20, 99], HISTORIAL[2], 5)
+
+
+def test_novedad_ofrecida_divide_por_k():
+    # El usuario 2 recibe 3 recomendaciones, de las que 1 es nueva.
+    # Con K=5 la novedad es 1/5: los huecos no la suben.
+    assert novedad_ofrecida([60, 70, 80], HISTORIAL[2], 5) == pytest.approx(0.2)
+
+
+def test_recomendar_solo_el_historial_da_novedad_cero():
+    # Es el caso del recomendador actual: rankea lo que la persona ya compro.
+    assert novedad_ofrecida([20, 40, 60], HISTORIAL[1], 3) == pytest.approx(0.0)
+
+
+def test_objetivos_nuevos_saca_lo_que_ya_conocia():
+    # El usuario 1 compro {20, 30, 99} y ya conocia el 20.
+    assert objetivos_nuevos(VERDAD[1], HISTORIAL[1]) == {30, 99}
+    # El usuario 2 compro solo 70, que ya conocia: no compro nada nuevo.
+    assert objetivos_nuevos(VERDAD[2], HISTORIAL[2]) == set()
+
+
+def test_aciertos_nuevos_no_cuenta_los_de_recompra():
+    # Al usuario 1 le acertamos 20 y 30, pero el 20 ya lo conocia.
+    assert aciertos(RECOMENDACIONES[1], VERDAD[1], 5) == 2
+    assert aciertos_nuevos(RECOMENDACIONES[1], VERDAD[1], HISTORIAL[1], 5) == 1
+
+
+def test_evaluar_reproduce_las_cuentas_de_novedad_a_mano():
+    n = evaluar(RECOMENDACIONES, VERDAD, k=5, tamano_catalogo=100,
+                historial=HISTORIAL)["novedad"]
+
+    # ofrecida  = (3/5 + 1/5 + 3/5) / 3
+    assert n["novedad_ofrecida"] == pytest.approx(1.4 / 3)
+    # precision = (1/3 + 0/1 + 0/3) / 3
+    assert n["precision_novedad"] == pytest.approx(1 / 9)
+    # recall    = (1/2 + 0/2) / 2   <- el usuario 2 no entra
+    assert n["recall_novedad"] == pytest.approx(0.25)
+    # hit_rate  = 1 / 2
+    assert n["hit_rate_novedad"] == pytest.approx(0.5)
+
+
+def test_cada_metrica_de_novedad_reporta_su_propio_n():
+    n = evaluar(RECOMENDACIONES, VERDAD, k=5, tamano_catalogo=100,
+                historial=HISTORIAL)["novedad"]
+    # A los tres les ofrecimos algo nuevo, pero solo dos compraron algo nuevo.
+    assert n["n_con_novedad_ofrecida"] == 3
+    assert n["n_con_objetivo_nuevo"] == 2
+
+
+def test_quien_no_compro_nada_nuevo_no_entra_en_recall_de_novedad():
+    # Solo el usuario 2, que compro unicamente lo que ya conocia.
+    n = evaluar({2: RECOMENDACIONES[2]}, {2: VERDAD[2]}, k=5,
+                tamano_catalogo=100, historial={2: HISTORIAL[2]})["novedad"]
+    assert n["n_con_objetivo_nuevo"] == 0
+    # Sin usuarios contra los que medir, es 0 y no una division por cero.
+    assert n["recall_novedad"] == pytest.approx(0.0)
+    # Pero si le ofrecimos novedad: eso se mide igual.
+    assert n["novedad_ofrecida"] == pytest.approx(0.2)
+
+
+def test_el_bloque_de_novedad_solo_aparece_si_se_pasa_historial():
+    sin = evaluar(RECOMENDACIONES, VERDAD, k=5, tamano_catalogo=100)
+    con = evaluar(RECOMENDACIONES, VERDAD, k=5, tamano_catalogo=100,
+                  historial=HISTORIAL)
+    assert "novedad" not in sin
+    assert "novedad" in con
+    # Y no toca ninguna metrica de recompra.
+    assert sin["recall"] == pytest.approx(con["recall"])
+    assert sin["hit_rate"] == pytest.approx(con["hit_rate"])
+
+
+def test_usuario_sin_historial_tiene_todo_nuevo():
+    # No estar en el diccionario es distinto de tener historial vacio? No:
+    # las dos cosas significan que no compro nada antes.
+    n = evaluar({1: [7, 8]}, {1: {7}}, k=2, tamano_catalogo=100,
+                historial={})["novedad"]
+    assert n["novedad_ofrecida"] == pytest.approx(1.0)
+    assert n["recall_novedad"] == pytest.approx(1.0)
+
+
+def test_la_novedad_tambien_se_calcula_por_segmento():
+    segmentos = {1: "heavy", 2: "heavy", 3: "nuevo"}
+    r = evaluar(RECOMENDACIONES, VERDAD, k=5, tamano_catalogo=100,
+                segmentos=segmentos, historial=HISTORIAL)
+    assert "novedad" in r["segmentos"]["heavy"]
+    # En heavy estan los usuarios 1 y 2: ofrecida = (3/5 + 1/5) / 2
+    assert r["segmentos"]["heavy"]["novedad"]["novedad_ofrecida"] ==         pytest.approx(0.4)

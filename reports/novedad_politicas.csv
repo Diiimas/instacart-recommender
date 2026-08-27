@@ -1,0 +1,5 @@
+politica,hit_rate,recall,aciertos_totales,aciertos_nuevos,hit_rate_novedad,precio
+sin novedad,0.872,0.3556,79401,0,0.0,
+1 lugar a todos,0.868,0.3423,75416,797,0.0372,6.0
+2 nuevo / 1 medio / 0 heavy,0.8688,0.3446,76188,923,0.0424,4.5
+3 nuevo / 1 medio / 0 heavy,0.8665,0.3404,75082,1141,0.0506,4.8
