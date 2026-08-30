@@ -1,81 +1,118 @@
-# Análisis de resultados y propuesta de métricas de evaluación
+# Análisis de resultados y métricas de evaluación
 
-**Data Analyst · Anastasia Ganderats · Daily 3**
+**Data Analyst · Anastasia Ganderats · Sprint 2 (modelo final)**
 
-Propuesta para acordar entre todos cómo leemos y nombramos la evaluación. Se apoya en los
-resultados que ya midieron Julieta (protocolo + baselines) y Dimas (candidatos).
+Lectura de los resultados del sistema final y cómo nombramos la evaluación. Se apoya en la corrida
+final de Julieta (protocolo, modelos y sistema de dos bloques) y en el análisis de features y
+segmentos del EDA.
 
-> **Universos (importante):** los valores de baseline y candidatos de este documento (Recall, Hit Rate, cobertura 71,9 %) corresponden a los **131.209 usuarios evaluables**, igual que el análisis de features y segmentos del EDA. La **comparación oficial entre modelos** (LightGBM vs. baselines) se realiza sobre los **26.243 usuarios de validación** — donde, por ejemplo, la cobertura de recompra es ~**44,9 %**. Son universos distintos, a propósito.
+> **Universos (importante):** la comparación oficial entre modelos (LightGBM vs. baselines) y los
+> resultados del sistema final se calculan sobre los **26.243 usuarios de validación**. El análisis de
+> features, segmentos y cobertura del catálogo del EDA usa los **131.209 usuarios evaluables**. Son
+> universos distintos, a propósito, y no se mezclan.
 
-## 1. Lectura de los resultados del baseline (recompra personal)
+## 1. El sistema final: dos bloques
 
-| Métrica | Valor | Lectura |
+El sistema no devuelve una sola lista, sino dos, en lugares distintos de la pantalla:
+
+- **Bloque principal (recompra):** hasta 10 productos que el cliente vuelve a comprar. Es la parte
+  fuerte.
+- **Bloque de sugerencias (novedad):** hasta 5 / 2 / 1 productos nuevos según el segmento (nuevo /
+  medio / heavy). Es descubrimiento.
+
+Cada bloque se mide con su propia vara. La clave de todo el análisis es no mezclarlos: la recompra y
+el descubrimiento son necesidades distintas y se evalúan aparte.
+
+## 2. Bloque principal: qué tan bien predecimos la recompra
+
+Comparación oficial sobre los 26.243 usuarios de validación, mismo protocolo y mismo corte K=10.
+
+| Modelo | Hit Rate@10 | Recall@10 macro | Cobertura | Lift |
+|---|---:|---:|---:|---:|
+| Popularidad (baseline) | 46,1 % | 0,070 | 0,0 % | 1,0x |
+| Recompra personal | 85,5 % | 0,327 | 44,9 % | 3,66x |
+| Heurística | 85,5 % | 0,339 | 43,3 % | 3,82x |
+| Regresión logística | 86,8 % | 0,348 | 36,9 % | 3,96x |
+| **LightGBM (elegido)** | **87,2 %** | **0,356** | 39,0 % | **4,07x** |
+
+**Lectura:** el Hit Rate pasa de 46 % (popularidad) a 87 % (LightGBM), casi el doble. El bloque
+principal le acierta al menos un producto habitual a **87 de cada 100 clientes** (79.401 aciertos
+totales). El lift de 4,07x dice que captura la recompra cuatro veces mejor que recomendar lo popular.
+
+## 3. Bloque de sugerencias: qué tan bien descubrimos
+
+El bloque de novedad suma **1.964 aciertos de descubrimiento sin resignar ninguno de recompra**,
+porque va aparte del principal. Rinde distinto según el segmento, y por eso su tamaño cambia:
+
+| Segmento | Recompra (Hit Rate) | Sugerencias (hasta) | Acierto de novedad | Aciertos nuevos |
+|---|---:|---:|---:|---:|
+| Nuevos | 83,0 % | 5 | 16,5 % | 1.247 |
+| Medios | 87,2 % | 2 | 6,6 % | 573 |
+| Heavy | 91,1 % | 1 | 2,3 % | 144 |
+
+**Lectura:** la recompra sube con la antigüedad (al heavy le acertamos casi siempre), pero el
+descubrimiento va al revés, rinde mucho más en los nuevos (16,5 % contra 2,3 %). Tiene sentido: el
+cliente nuevo todavía está explorando. Por eso el bloque de sugerencias es más grande justo donde más
+se necesita.
+
+> **Los tamaños son máximos, no fijos.** El bloque principal puede traer menos de 10 productos cuando
+> el cliente tiene poco historial (le pasa al 6 % de los usuarios, y al 14 % de los nuevos), y las
+> sugerencias también pueden venir incompletas. En la interfaz se comunica como **hasta 10** y **hasta
+> 5 / 2 / 1**.
+
+## 4. Por qué la cobertura NO valida descubrimiento
+
+La recompra cubre el **71,9 % del catálogo** sobre los evaluables (39 % en validación), pero tiene
+descubrimiento cero por construcción: nunca recomienda algo fuera del historial del cliente. Cubre
+mucho solo porque a cada persona le da sus propios productos. La cobertura mide **amplitud del catálogo
+tocado**, no capacidad de sorprender. Usarla para la historia de descubrimiento nos engañaría. El
+descubrimiento se mide con su propio acierto de novedad, sobre los targets que el cliente nunca compró
+(hay 555.793 objetivos nuevos entre 107.008 clientes).
+
+## 5. Cheat-sheet de métricas (para no mezclar nombres)
+
+| Métrica | Qué mide | Ojo |
 |---|---|---|
-| Hit Rate@10 | 85,5 % | 85 de cada 100 usuarios reciben al menos 1 acierto |
-| Recall@10 macro | 0,330 | el cliente promedio recibe el 33 % de su lista objetivo |
-| Recall@10 micro | 0,261 | capturamos el 26 % de todos los productos vendidos |
-| Popularidad (Recall / Hit Rate) | 7 % / 45,8 % | mismos aciertos, distinto nombre |
-
-*Valores sobre los **131.209 usuarios evaluables**. La comparación oficial entre modelos (cobertura de recompra ~44,9 %) se realiza sobre los **26.243 de validación** — ver `comparacion_final.csv` / dashboard.*
-
-**Interpretación:** el baseline de recompra es fortísimo en repetición y difícil de superar ahí
-—exactamente lo que anticipaba el EDA (sesgo de popularidad + recompra alta)—. El margen de un
-modelo que rankee mejor está en **heavy y medio** (la recompra captura el 51 % de lo alcanzable en
-heavy vs. 71 % en nuevos), ~93.000 de los 131.209 evaluables. A los **nuevos** los destraba el
-**descubrimiento** (candidatos), no un mejor ranking.
-
-## 2. Por qué la cobertura NO valida "descubrimiento"
-
-La recompra personal cubre el **71,9 % del catálogo** (sobre los 131.209 evaluables; en validación, ~44,9 %) pero tiene **descubrimiento cero por
-construcción**: nunca recomienda algo fuera del historial del usuario. Cubre mucho solo porque cada
-persona recibe *sus* productos. Conclusión: la cobertura mide **amplitud del catálogo tocado**, no
-capacidad de descubrimiento. Usarla para la historia de descubrimiento nos engaña.
-
-## 3. Propuesta: evaluar con DOS lentes, no una
-
-**Lente A — Repetición** (¿acertamos lo habitual?): sobre **todos** los targets.
-- Recall@10 (macro y micro) y Hit Rate@10 → ya medidos.
-
-**Lente B — Descubrimiento** (¿acertamos lo NUEVO relevante?): **solo** sobre los targets que el
-usuario nunca compró (hay 555.793).
-- **Recall@10 de novedad** y **Hit Rate@10 de novedad** → Dimas ya los computa (3,25 % / 14,24 %). Solo hay que nombrarlos como *la* métrica de descubrimiento.
-- **Tasa de novedad**: % de las recomendaciones que son nuevas para el usuario (recompra = 0 %; candidatos > 0 %). Mide cuánto empuja el modelo más allá del historial.
-- **Diversidad de la novedad**: nº de productos distintos usados en las recomendaciones nuevas (Dimas: el top-10 de candidatos usa solo 531 productos → baja). Es "cobertura", pero medida solo sobre lo nuevo, que es donde sí importa.
-
-La cobertura de catálogo se mantiene como indicador de amplitud, con la aclaración explícita de que
-**no** es descubrimiento.
-
-## 4. Métrica principal por historia de usuario (a acordar)
-
-| Historia de usuario | KPI principal | Acompañamiento |
-|---|---|---|
-| "Recomprar rápido lo habitual" | Hit Rate@10 (85,5 %) | Recall@10 macro/micro |
-| "Descubrir productos nuevos relevantes" | Hit Rate@10 de novedad (14,24 %) | Tasa de novedad + Diversidad de novedad |
-
-Así cada historia se mide con lo que de verdad la valida, y no confundimos "cubre mucho" con
-"descubre bien".
-
-## 5. Cheat-sheet de métricas (para el dashboard — no mezclar nombres)
-
-| Métrica | Qué mide | Baseline | Ojo |
-|---|---|---:|---|
-| Recall@10 macro | promedio del recall por persona (todos pesan igual) | 0,330 | 7 puntos por encima del micro |
-| Recall@10 micro | aciertos totales / productos totales (quien compra más pesa más) | 0,261 | — |
-| Hit Rate@10 | % de usuarios con ≥1 acierto | 0,855 | **NO es Recall**: en popularidad, Recall 7 % vs Hit Rate 45,8 % = mismos aciertos, 6× de diferencia |
-| Cobertura de catálogo | % del catálogo recomendado | 71,9 % | mide amplitud, **no** descubrimiento |
-| Recall@10 de novedad | recall solo sobre targets nuevos | 3,25 % | esta sí es la métrica de descubrimiento |
+| Hit Rate@10 | % de clientes con al menos 1 acierto | **NO es Recall**. En popularidad, Recall 7 % vs Hit Rate 46 % son los mismos aciertos con distinto nombre |
+| Recall@10 macro | promedio del recall por cliente (todos pesan igual) | queda por encima del micro |
+| Recall@10 micro | aciertos totales / productos totales (quien compra más pesa más) | 0,286 en el modelo elegido |
+| Cobertura de catálogo | % del catálogo recomendado | mide amplitud, **no** descubrimiento |
+| Acierto de novedad | Hit Rate solo sobre targets nuevos | esta sí es la métrica de descubrimiento |
 
 **Regla para los gráficos:** el título dice la métrica exacta y su definición. Nunca "Recall" a
-secas — si mostramos uno con el nombre del otro, nos equivocamos por hasta 6×.
+secas; si mostramos una con el nombre de la otra, nos equivocamos por hasta seis veces.
 
-## 6. Mi control cualitativo (siguiente paso)
+## 6. El techo del modelo: con los experimentos hechos, el límite parece estar en el dato
 
-Tomar 3–5 usuarios ejemplo (1 nuevo, 1 medio, 1 heavy) y mostrar su Top-10 de recompra vs. los
-candidatos, marcando si el target real cayó adentro. Valida que las recomendaciones tienen sentido
-de negocio, no solo que la métrica da bien.
+Después de elegir LightGBM probamos cinco caminos para exprimirlo más: seis variables nuevas, objetivo
+de ranking (lambdarank), más datos de entrenamiento, hiperparámetros con Optuna y el tamaño del
+carrito. Ninguno movió la aguja de forma apreciable. Dos ejemplos: sumar seis variables dejó el Hit
+Rate en 87,20 % contra 87,22 %, y cuadruplicar los datos de entrenamiento (de 25 % a 100 %) dejó el
+Recall en ~0,355.
 
-## 7. Limitaciones y oportunidades (para Sprint 2)
+**Lectura, con la cautela que corresponde:** con los experimentos realizados, el límite parece estar en
+la información disponible más que en el modelo. El historial de compras no incluye señales como precio
+o promociones, que el dataset de Instacart no trae; son fuentes que valdría la pena explorar, aunque
+todavía no pudimos medir directamente su aporte. No afirmamos que el modelo haya tocado un techo
+absoluto, sino que estos cinco intentos no lo movieron.
 
-- El dataset es de **recompra**: la naturaleza de los datos **dificulta** el descubrimiento, y el **generador actual** alcanza un Hit Rate de novedad de **14,24 %** — es el resultado del generador de hoy, no un límite demostrado del dataset. Por eso el descubrimiento se mide y se comunica aparte.
-- **Oportunidad:** formalizar la métrica de novedad en `src/evaluation/metrics.py` (hoy sale de la evaluación de candidatos, por separado) y mejorar el generador de candidatos, que concentra el Top-10 en 531 productos.
-- El protocolo (split temporal, sin fuga) y las métricas ya están unificadas en el módulo común de evaluación.
+## 7. Control cualitativo (hecho)
+
+En el dashboard, el explorador muestra para cualquiera de los 26.243 clientes de validación sus dos
+bloques con lo que acertó de verdad (columna del archivo de recomendaciones). Revisado con casos de
+los tres segmentos: las recomendaciones tienen sentido de negocio, y se ve con transparencia dónde el
+sistema acierta y dónde llega a su techo (por ejemplo, un cliente nuevo cuyo próximo pedido es casi
+todo nuevo).
+
+## 8. Limitaciones y próximos pasos
+
+- El dataset es de **recompra**: su naturaleza dificulta el descubrimiento, y el generador de novedad
+  concentra sus sugerencias en pocos productos distintos. Ahí está el margen de mejora.
+- **Reglas de asociación (notebook 05):** con lift aparecen candidatos a complementos (vinos con vinos,
+  lavandería con limpieza, tofu con congelados veganos), a validar y separar de variantes y sustitutos.
+  Son un punto de partida para diversificar el bloque de sugerencias más allá del generador actual.
+- **Enriquecer el dato:** precio y promociones son fuentes a explorar para destrabar el descubrimiento;
+  los cinco experimentos de la sección 6 sugieren que el límite está más en el dato que en el modelo,
+  aunque su aporte todavía no se midió directamente.
+- El protocolo (split temporal, sin fuga) y las métricas están unificadas en el módulo común de
+  evaluación.
