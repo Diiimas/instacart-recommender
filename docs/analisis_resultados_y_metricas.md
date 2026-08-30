@@ -82,17 +82,19 @@ descubrimiento se mide con su propio acierto de novedad, sobre los targets que e
 **Regla para los gráficos:** el título dice la métrica exacta y su definición. Nunca "Recall" a
 secas; si mostramos una con el nombre de la otra, nos equivocamos por hasta seis veces.
 
-## 6. El límite es el dato
+## 6. El techo del modelo: con los experimentos hechos, el límite parece estar en el dato
 
 Después de elegir LightGBM probamos cinco caminos para exprimirlo más: seis variables nuevas, objetivo
 de ranking (lambdarank), más datos de entrenamiento, hiperparámetros con Optuna y el tamaño del
-carrito. Ninguno movió la aguja. Dos ejemplos claros: sumar seis variables dejó el Hit Rate en 87,20 %
-contra 87,22 %, y cuadruplicar los datos de entrenamiento (de 25 % a 100 %) dejó el Recall clavado en
-~0,355.
+carrito. Ninguno movió la aguja de forma apreciable. Dos ejemplos: sumar seis variables dejó el Hit
+Rate en 87,20 % contra 87,22 %, y cuadruplicar los datos de entrenamiento (de 25 % a 100 %) dejó el
+Recall en ~0,355.
 
-**Conclusión que respaldan estos experimentos:** el límite no es el modelo, es el dato. Para crecer
-hace falta información que el historial de compras no tiene, como precio o promociones, y el dataset de
-Instacart no la trae. Saberlo evita perder tiempo afinando un modelo que ya tocó su techo.
+**Lectura, con la cautela que corresponde:** con los experimentos realizados, el límite parece estar en
+la información disponible más que en el modelo. El historial de compras no incluye señales como precio
+o promociones, que el dataset de Instacart no trae; son fuentes que valdría la pena explorar, aunque
+todavía no pudimos medir directamente su aporte. No afirmamos que el modelo haya tocado un techo
+absoluto, sino que estos cinco intentos no lo movieron.
 
 ## 7. Control cualitativo (hecho)
 
@@ -106,10 +108,11 @@ todo nuevo).
 
 - El dataset es de **recompra**: su naturaleza dificulta el descubrimiento, y el generador de novedad
   concentra sus sugerencias en pocos productos distintos. Ahí está el margen de mejora.
-- **Reglas de asociación (notebook 05):** con lift aparecen complementos accionables (vinos con vinos,
-  lavandería con limpieza, tofu con congelados veganos). Son la base para diversificar el bloque de
-  sugerencias más allá del generador actual.
-- **Enriquecer el dato:** sumar precio y promociones es lo que destraba el descubrimiento, según los
-  cinco experimentos de la sección 6.
+- **Reglas de asociación (notebook 05):** con lift aparecen candidatos a complementos (vinos con vinos,
+  lavandería con limpieza, tofu con congelados veganos), a validar y separar de variantes y sustitutos.
+  Son un punto de partida para diversificar el bloque de sugerencias más allá del generador actual.
+- **Enriquecer el dato:** precio y promociones son fuentes a explorar para destrabar el descubrimiento;
+  los cinco experimentos de la sección 6 sugieren que el límite está más en el dato que en el modelo,
+  aunque su aporte todavía no se midió directamente.
 - El protocolo (split temporal, sin fuga) y las métricas están unificadas en el módulo común de
   evaluación.
