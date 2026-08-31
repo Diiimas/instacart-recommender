@@ -73,27 +73,31 @@ def rec_usuario(uid: int):
     if not PARQ.exists():
         return None
     con = duckdb.connect()
-    return con.execute(f"""SELECT bloque, posicion, product_name, aisle, acerto
+    return con.execute(f"""SELECT segmento, bloque, posicion, product_name, aisle, acerto
         FROM '{PARQ.as_posix()}' WHERE user_id={int(uid)} ORDER BY bloque DESC, posicion""").fetchdf()
 
 @st.cache_data
 def clientes_ejemplo():
-    """(default, lista) de clientes con acierto variado para sugerir en el explorador:
-    casos donde acierta mucho, a medias y poco, mezclados sin decir cual es cual."""
+    """(default, lista) de clientes de ejemplo balanceados por segmento (nuevos, medios, heavy) y con
+    acierto variado: casos donde acierta mucho, con novedad, y alguno flojo. Mezclados, sin etiquetar."""
     if not PARQ.exists():
         return None, []
     con = duckdb.connect()
-    df = con.execute(f"""SELECT user_id,
+    df = con.execute(f"""SELECT user_id, ANY_VALUE(segmento) seg,
           SUM(CASE WHEN bloque='principal'  AND acerto THEN 1 ELSE 0 END) ap,
           SUM(CASE WHEN bloque='sugerencia' AND acerto THEN 1 ELSE 0 END) asg
         FROM '{PARQ.as_posix()}' GROUP BY user_id""").fetchdf()
-    consug = df[df.asg > 0].nlargest(3, "ap")           # recompra y novedad aciertan
-    altos  = df.nlargest(2, "ap")                        # recompra fuerte
-    medios = df[(df.ap >= 4) & (df.ap <= 6)].head(2)     # a medias
-    bajos  = df.nsmallest(2, "ap")                       # flojos (honestidad)
-    sel = pd.concat([consug, altos, medios, bajos]).drop_duplicates("user_id")
-    ids = sorted(int(u) for u in sel["user_id"])
-    default = int(consug["user_id"].iloc[0]) if len(consug) else (ids[0] if ids else 13)
+    sel = []
+    for s in ["nuevo", "medio", "heavy"]:
+        d = df[df.seg == s]
+        wow = d[d.asg > 0].nlargest(1, "ap")            # acierta recompra y novedad
+        fuerte = d.nlargest(1, "ap")                     # recompra fuerte
+        flojo = d[d.ap <= 2].head(1)                     # flojo (honestidad)
+        sel.append(pd.concat([wow, fuerte, flojo]).drop_duplicates("user_id").head(3))
+    out = pd.concat(sel).drop_duplicates("user_id")
+    ids = sorted(int(u) for u in out["user_id"])
+    wowall = out[out.asg > 0].nlargest(1, "ap")
+    default = int(wowall["user_id"].iloc[0]) if len(wowall) else (ids[0] if ids else 13)
     return default, ids
 
 # ---------------------------------------------------------------- Narrativa fija
@@ -356,6 +360,8 @@ with t9:
         if df is None or df.empty:
             st.warning("Ese user_id no esta en la base de validacion. Proba con uno de los sugeridos.")
         else:
+            seg = str(df["segmento"].iloc[0]).capitalize() if "segmento" in df.columns and len(df) else "?"
+            st.markdown(f"Cliente **{int(uid)}** · segmento **:blue[{seg}]**")
             c1, c2 = st.columns(2)
             for col, bloque, titulo, cls in [(c1, "principal", "Carrito habitual (recompra)", "blue"),
                                              (c2, "sugerencia", "Tambien podrias necesitar (novedad)", "red")]:
