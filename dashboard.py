@@ -209,8 +209,9 @@ with t3:
         st.altair_chart(ch, width='stretch')
         st.dataframe(cf[["Modelo", "Hit Rate", "Recall@10", "Cobertura", "Lift"]], hide_index=True, width='stretch')
         st.markdown("<div class='good'><b>El Hit Rate casi se duplica: de 46 % (popularidad) a 87 % (LightGBM).</b> "
-                    "Y el Recall es unas cinco veces mayor, de 0,070 a 0,356. LightGBM gana en todas las metricas y es "
-                    "el modelo elegido.</div>", unsafe_allow_html=True)
+                    "Y el Recall es unas cinco veces mayor, de 0,070 a 0,356. LightGBM obtiene el mejor Hit Rate y Recall "
+                    "y, aunque no maximiza la cobertura, es el modelo elegido por su rendimiento predictivo.</div>",
+                    unsafe_allow_html=True)
     st.markdown("#### Y despues probamos exprimirlo mas")
     st.write("Cinco caminos para mejorar el modelo: seis variables nuevas, objetivo de ranking (lambdarank), mas datos "
              "de entrenamiento, hiperparametros con Optuna y el tamano del carrito. Ninguno movio la aguja.")
@@ -226,11 +227,11 @@ with t3:
     if cur is not None:
         r0 = cur.iloc[0]["recall"]; r1 = cur.iloc[-1]["recall"]
         c2.markdown(f"<div class='card'><div class='lbl'>Cuadruplicar los datos (25% &rarr; 100%)</div>"
-                    f"<div class='big'>Recall {r0:.3f} &rarr; {r1:.3f}</div><div class='lbl'>plano: no faltan datos</div></div>",
+                    f"<div class='big'>Recall {r0:.3f} &rarr; {r1:.3f}</div><div class='lbl'>plano: mas datos no lo mueven</div></div>",
                     unsafe_allow_html=True)
-    st.markdown("<div class='callout'><b>El limite no es el modelo, es el dato.</b> Es lo que muestran estos "
-                "experimentos: falta informacion que el historial de compras no tiene, como precio o promociones, y el "
-                "dataset de Instacart no la trae. Saberlo evita perder tiempo afinando un modelo que ya toco su techo.</div>",
+    st.markdown("<div class='callout'><b>Los experimentos realizados sugieren que el modelo se acerca a su techo con las "
+                "fuentes y variables actuales.</b> Precio y promociones son posibles fuentes de informacion para explorar; "
+                "el historial de compras no las incluye y el dataset de Instacart no las trae.</div>",
                 unsafe_allow_html=True)
 
 # ---------------------------------------------------------------- 4. Que mira el modelo
@@ -337,9 +338,9 @@ with t8:
     c1.markdown("<div class='good'><h3>Que activar ahora</h3><p><b>El sistema de dos bloques.</b> La recompra le acierta "
                 "el carrito habitual a casi 9 de cada 10 clientes, y las sugerencias suman descubrimiento sin quitarle "
                 "lugar a lo que si necesita.</p></div>", unsafe_allow_html=True)
-    c2.markdown("<div class='callout'><h3>El techo, con honestidad</h3><p><b>El limite es el dato.</b> Cinco experimentos "
-                "lo confirman: para crecer hace falta informacion nueva (precio, promociones), no un modelo mas complejo.</p></div>",
-                unsafe_allow_html=True)
+    c2.markdown("<div class='callout'><h3>El techo, con honestidad</h3><p>Los experimentos realizados sugieren que el "
+                "modelo se acerca a su techo con las fuentes y variables actuales. Precio y promociones son posibles "
+                "fuentes de informacion para explorar.</p></div>", unsafe_allow_html=True)
     st.markdown("**Backlog Sprint 2**")
     st.markdown(
         "- Desplegar el sistema de dos bloques y dejar este dashboard como demo final.\n"
