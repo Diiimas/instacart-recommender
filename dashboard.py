@@ -208,9 +208,9 @@ with t3:
             tooltip=["Modelo", "Hit Rate", "Recall@10", "Cobertura", "Lift"]).properties(height=300)
         st.altair_chart(ch, width='stretch')
         st.dataframe(cf[["Modelo", "Hit Rate", "Recall@10", "Cobertura", "Lift"]], hide_index=True, width='stretch')
-        st.markdown("<div class='good'><b>El Hit Rate pasa de 46 % (popularidad) a 87 % (LightGBM), casi el doble.</b> "
-                    "LightGBM gana en todas las metricas (Recall@10 0,356 y lift 4,07x): capta la recompra cuatro veces "
-                    "mejor que recomendar lo popular. Es el modelo elegido.</div>", unsafe_allow_html=True)
+        st.markdown("<div class='good'><b>El Hit Rate casi se duplica: de 46 % (popularidad) a 87 % (LightGBM).</b> "
+                    "Y el Recall es unas cinco veces mayor, de 0,070 a 0,356. LightGBM gana en todas las metricas y es "
+                    "el modelo elegido.</div>", unsafe_allow_html=True)
     st.markdown("#### Y despues probamos exprimirlo mas")
     st.write("Cinco caminos para mejorar el modelo: seis variables nuevas, objetivo de ranking (lambdarank), mas datos "
              "de entrenamiento, hiperparametros con Optuna y el tamano del carrito. Ninguno movio la aguja.")
