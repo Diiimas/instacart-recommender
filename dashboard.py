@@ -77,12 +77,24 @@ def rec_usuario(uid: int):
         FROM '{PARQ.as_posix()}' WHERE user_id={int(uid)} ORDER BY bloque DESC, posicion""").fetchdf()
 
 @st.cache_data
-def user_ids_muestra(n=8):
+def clientes_ejemplo():
+    """(default, lista) de clientes con acierto variado para sugerir en el explorador:
+    casos donde acierta mucho, a medias y poco, mezclados sin decir cual es cual."""
     if not PARQ.exists():
-        return []
+        return None, []
     con = duckdb.connect()
-    return [int(x) for x in con.execute(
-        f"SELECT DISTINCT user_id FROM '{PARQ.as_posix()}' ORDER BY user_id LIMIT {n}").fetchdf()["user_id"]]
+    df = con.execute(f"""SELECT user_id,
+          SUM(CASE WHEN bloque='principal'  AND acerto THEN 1 ELSE 0 END) ap,
+          SUM(CASE WHEN bloque='sugerencia' AND acerto THEN 1 ELSE 0 END) asg
+        FROM '{PARQ.as_posix()}' GROUP BY user_id""").fetchdf()
+    consug = df[df.asg > 0].nlargest(3, "ap")           # recompra y novedad aciertan
+    altos  = df.nlargest(2, "ap")                        # recompra fuerte
+    medios = df[(df.ap >= 4) & (df.ap <= 6)].head(2)     # a medias
+    bajos  = df.nsmallest(2, "ap")                       # flojos (honestidad)
+    sel = pd.concat([consug, altos, medios, bajos]).drop_duplicates("user_id")
+    ids = sorted(int(u) for u in sel["user_id"])
+    default = int(consug["user_id"].iloc[0]) if len(consug) else (ids[0] if ids else 13)
+    return default, ids
 
 # ---------------------------------------------------------------- Narrativa fija
 PITCH = ("Le arma a cada cliente su proximo carrito a partir del historial: un bloque de recompra con lo "
@@ -336,10 +348,10 @@ with t8:
 with t9:
     st.subheader("Explora las recomendaciones de un cliente")
     if PARQ.exists():
-        ejemplos = user_ids_muestra(8)
-        hint = ", ".join(str(u) for u in ejemplos[:6]) if ejemplos else "13, 24"
-        uid = st.number_input("user_id (de los 26.243 de validacion)", min_value=1, max_value=210000, value=ejemplos[0] if ejemplos else 13, step=1)
-        st.caption(f"Proba con estos: {hint}")
+        default_uid, hint_ids = clientes_ejemplo()
+        uid = st.number_input("user_id (de los 26.243 de validacion)", min_value=1, max_value=210000, value=default_uid or 13, step=1)
+        if hint_ids:
+            st.caption("Proba con distintos clientes: " + ", ".join(str(u) for u in hint_ids))
         df = rec_usuario(int(uid))
         if df is None or df.empty:
             st.warning("Ese user_id no esta en la base de validacion. Proba con uno de los sugeridos.")
