@@ -90,10 +90,11 @@ def clientes_ejemplo():
     sel = []
     for s in ["nuevo", "medio", "heavy"]:
         d = df[df.seg == s]
-        wow = d[d.asg > 0].nlargest(1, "ap")            # acierta recompra y novedad
-        fuerte = d.nlargest(1, "ap")                     # recompra fuerte
-        flojo = d[d.ap <= 2].head(1)                     # flojo (honestidad)
-        sel.append(pd.concat([wow, fuerte, flojo]).drop_duplicates("user_id").head(3))
+        wow    = d[d.asg > 0].nlargest(2, "ap")          # aciertan recompra y novedad
+        fuerte = d.nlargest(2, "ap")                      # recompra fuerte
+        medias = d[(d.ap >= 4) & (d.ap <= 7)].head(2)     # a medias
+        flojo  = d[d.ap <= 2].head(1)                     # flojos (honestidad)
+        sel.append(pd.concat([wow, fuerte, medias, flojo]).drop_duplicates("user_id").head(7))
     out = pd.concat(sel).drop_duplicates("user_id")
     ids = sorted(int(u) for u in out["user_id"])
     wowall = out[out.asg > 0].nlargest(1, "ap")
@@ -353,9 +354,19 @@ with t9:
     st.subheader("Explora las recomendaciones de un cliente")
     if PARQ.exists():
         default_uid, hint_ids = clientes_ejemplo()
-        uid = st.number_input("user_id (de los 26.243 de validacion)", min_value=1, max_value=210000, value=default_uid or 13, step=1)
+        if "uid_input" not in st.session_state:
+            st.session_state["uid_input"] = int(default_uid or 13)
+        def _set_uid(c):
+            st.session_state["uid_input"] = int(c)
         if hint_ids:
-            st.caption("Proba con distintos clientes: " + ", ".join(str(u) for u in hint_ids))
+            st.write("Toca un cliente de ejemplo (o escribi un user_id abajo):")
+            percol = 7
+            for i in range(0, len(hint_ids), percol):
+                fila = hint_ids[i:i + percol]
+                cols = st.columns(percol)
+                for col, cid in zip(cols, fila):
+                    col.button(str(cid), key=f"cli_{cid}", on_click=_set_uid, args=(cid,), width='stretch')
+        uid = st.number_input("user_id (de los 26.243 de validacion)", min_value=1, max_value=210000, step=1, key="uid_input")
         df = rec_usuario(int(uid))
         if df is None or df.empty:
             st.warning("Ese user_id no esta en la base de validacion. Proba con uno de los sugeridos.")
