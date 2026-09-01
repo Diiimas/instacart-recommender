@@ -38,7 +38,11 @@ st.markdown(f"""<style>
     .callout {{ background:#fff;border-left:4px solid {ROJO};border-radius:0 12px 12px 0;padding:14px 16px;margin-top:12px; }}
     .good {{ background:#fff;border-left:4px solid {AZUL};border-radius:0 12px 12px 0;padding:14px 16px;margin-top:12px; }}
     .brand {{ color:{TINTA2};font-size:13px;font-weight:700;letter-spacing:.08em; }}
-    .stTabs [data-baseweb="tab-list"] {{ gap:4px; flex-wrap:wrap; }}
+    .stTabs [data-baseweb="tab-list"] {{ gap:6px; flex-wrap:wrap; }}
+    .stTabs [data-baseweb="tab"] {{ border-radius:9px 9px 0 0; padding:4px 12px; }}
+    .stTabs [aria-selected="true"] {{ background:#eaf1fb; box-shadow:0 3px 8px rgba(18,64,143,.20); font-weight:700; }}
+    .stButton > button {{ box-shadow:0 2px 5px rgba(18,64,143,.14); border:1px solid #cddcf2; border-radius:10px; transition:.15s; font-weight:600; color:{NAVY}; }}
+    .stButton > button:hover {{ box-shadow:0 5px 12px rgba(18,64,143,.26); border-color:{AZUL}; transform:translateY(-1px); }}
 </style>""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------- Rutas y datos
@@ -132,15 +136,18 @@ SEG_INFO = {  # nombre, % clientes, n clientes (validacion), descripcion
 }
 
 # ---------------------------------------------------------------- Encabezado
-head = st.columns([1, 8])
 if LOGO.exists():
-    head[0].image(str(LOGO), width=90)
-with head[1]:
-    st.markdown("<div class='brand'>BASKET ANALYTICS</div>", unsafe_allow_html=True)
-    st.title("Sistema de recomendacion personalizado · Instacart")
-    st.markdown(PITCH)
-st.caption("Sprint 2 · numeros reales de reports/ y de recomendaciones_dashboard.parquet (modelo final, dos bloques). "
-           "Comparacion de modelos sobre 26.243 usuarios de validacion.")
+    lc = st.columns([3, 2, 3])
+    lc[1].image(str(LOGO), width=230)
+st.markdown("<h1 style='text-align:center;margin:.2rem 0 .3rem'>Sistema de recomendacion personalizado · Instacart</h1>",
+            unsafe_allow_html=True)
+st.markdown(f"<p style='text-align:center;color:#33507a;font-size:16px;max-width:850px;margin:0 auto 8px'>{PITCH}</p>",
+            unsafe_allow_html=True)
+st.markdown("<p style='text-align:center;color:#12408f;font-size:13.5px;margin:0 0 2px'>💡 <b>Como usar:</b> recorre las "
+            "pestanas de izquierda a derecha; la ultima, <b>Explorador en vivo</b>, te deja elegir un cliente y ver sus "
+            "recomendaciones.</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center;color:#5a76a8;font-size:12.5px;margin:0 0 10px'>Sprint 2 · numeros reales del "
+            "modelo final (dos bloques), sobre 26.243 usuarios de validacion.</p>", unsafe_allow_html=True)
 
 tabs = st.tabs(["1· Problema", "2· Clientes", "3· Predecimos", "4· Que mira el modelo",
                 "5· Dos bloques", "6· Complementos", "7· Ejemplos", "8· Decision", "Explorador en vivo"])
@@ -249,8 +256,8 @@ with t4:
         top = imp.head(topn).iloc[::-1]
         ch = alt.Chart(top).mark_bar(cornerRadius=4, color=AZUL).encode(
             x=alt.X("Peso (%):Q", title="Peso en la decision (%)"),
-            y=alt.Y("Variable:N", sort=list(top["Variable"]), title=None),
-            tooltip=["Variable", "Peso (%)"]).properties(height=34 * topn)
+            y=alt.Y("Variable:N", sort=list(top["Variable"]), title=None, axis=alt.Axis(labelLimit=340)),
+            tooltip=["Variable", "Peso (%)"]).properties(height=36 * topn)
         st.altair_chart(ch, width='stretch')
         r, ra = imp.iloc[0], imp.iloc[1]
         st.markdown(f"<div class='good'><b>{r['Variable'].split(' (')[0]} y {ra['Variable'].split(' (')[0]} "
@@ -265,11 +272,11 @@ with t5:
     st.write("El sistema devuelve dos cosas separadas, en lugares distintos de la pantalla. No las mezclamos, para no "
              "vender de mas ni tapar el techo real.")
     c1, c2 = st.columns(2)
-    c1.markdown("<div class='b-prin'><h3>Carrito habitual (recompra)</h3><div class='m-rep'>hasta 10</div>"
+    c1.markdown("<div class='b-prin'><h3>🛒 Carrito habitual (recompra)</h3><div class='m-rep'>hasta 10</div>"
                 "<p>productos. Es lo que el cliente vuelve a comprar. Le acertamos al menos uno a <b>87 de cada 100</b> "
                 "clientes (79.401 aciertos). Puede traer menos de 10 si el cliente tiene poco historial.</p></div>",
                 unsafe_allow_html=True)
-    c2.markdown("<div class='b-sug'><h3>Tambien podrias necesitar (novedad)</h3><div class='m-desc'>hasta 5 / 2 / 1</div>"
+    c2.markdown("<div class='b-sug'><h3>✨ Tambien podrias necesitar (novedad)</h3><div class='m-desc'>hasta 5 / 2 / 1</div>"
                 "<p>sugerencias de productos nuevos, segun el segmento (nuevo / medio / heavy). Suman <b>1.964 aciertos "
                 "de descubrimiento sin resignar ninguno de recompra</b>, porque van en un bloque aparte.</p></div>",
                 unsafe_allow_html=True)
@@ -360,14 +367,16 @@ with t9:
         def _set_uid(c):
             st.session_state["uid_input"] = int(c)
         if hint_ids:
-            st.write("Toca un cliente de ejemplo (o escribi un user_id abajo):")
+            st.write("Toca un cliente de ejemplo:")
             percol = 7
             for i in range(0, len(hint_ids), percol):
                 fila = hint_ids[i:i + percol]
                 cols = st.columns(percol)
                 for col, cid in zip(cols, fila):
                     col.button(str(cid), key=f"cli_{cid}", on_click=_set_uid, args=(cid,), width='stretch')
-        uid = st.number_input("user_id (de los 26.243 de validacion)", min_value=1, max_value=210000, step=1, key="uid_input")
+        with st.expander("Buscar otro cliente por numero"):
+            st.number_input("user_id (de los 26.243 de validacion)", min_value=1, max_value=210000, step=1, key="uid_input")
+        uid = int(st.session_state["uid_input"])
         df = rec_usuario(int(uid))
         if df is None or df.empty:
             st.warning("Ese user_id no esta en la base de validacion. Proba con uno de los sugeridos.")
@@ -375,8 +384,8 @@ with t9:
             seg = str(df["segmento"].iloc[0]).capitalize() if "segmento" in df.columns and len(df) else "?"
             st.markdown(f"Cliente **{int(uid)}** · segmento **:blue[{seg}]**")
             c1, c2 = st.columns(2)
-            for col, bloque, titulo, cls in [(c1, "principal", "Carrito habitual (recompra)", "blue"),
-                                             (c2, "sugerencia", "Tambien podrias necesitar (novedad)", "red")]:
+            for col, bloque, titulo, cls in [(c1, "principal", "🛒 Carrito habitual (recompra)", "blue"),
+                                             (c2, "sugerencia", "✨ Tambien podrias necesitar (novedad)", "red")]:
                 d = df[df["bloque"] == bloque]
                 with col:
                     if d.empty:
