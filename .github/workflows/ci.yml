@@ -1,0 +1,61 @@
+name: Validación automática
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validar-proyecto:
+    name: Tests y validación del dashboard
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Ejecutar pruebas
+        run: python -m pytest tests/ -q
+
+      - name: Validar sintaxis del dashboard
+        run: python -m py_compile dashboard.py
+
+      - name: Verificar archivos del dashboard
+        shell: bash
+        run: |
+          archivos=(
+            "dashboard.py"
+            ".streamlit/config.toml"
+            "logo_ba.png"
+            "reports/recomendaciones_dashboard.parquet"
+            "reports/metricas_dashboard.csv"
+            "reports/metricas_dashboard_segmento.csv"
+          )
+
+          for archivo in "${archivos[@]}"; do
+            if [[ ! -f "$archivo" ]]; then
+              echo "::error file=$archivo::Falta un archivo requerido por el dashboard"
+              exit 1
+            fi
+          done
+
+          echo "Todos los archivos requeridos están disponibles."
