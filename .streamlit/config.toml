@@ -1,0 +1,10 @@
+# Fuerza el tema CLARO para que el texto no salga blanco sobre fondo claro.
+[theme]
+base = "light"
+primaryColor = "#12408f"
+backgroundColor = "#f2f7fd"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#0a2340"
+
+[browser]
+gatherUsageStats = false

@@ -39,3 +39,5 @@ pytest==8.4.2
 # Herramientas opcionales para ejecutar o convertir notebooks por consola
 # jupyter==1.1.1
 # nbconvert==7.17.1
+streamlit==1.62.0
+altair==6.2.2
