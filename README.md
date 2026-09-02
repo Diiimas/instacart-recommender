@@ -235,6 +235,8 @@ instacart-recommender/
 
 ### Documentación
 
+- [Informe técnico](docs/Basket_Analytics_Informe_Tecnico.pdf)
+- [Manual de usuario](docs/Basket_Analytics_Manual_Usuario.pdf)
 - [Contrato de datos](docs/data_contract.md)
 - [Diccionario de tablas procesadas](docs/data_dictionary.md)
 - [Análisis de resultados y métricas](docs/analisis_resultados_y_metricas.md)
