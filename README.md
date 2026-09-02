@@ -18,25 +18,33 @@
   <a href="https://lightgbm.readthedocs.io/">
     <img src="https://img.shields.io/badge/model-LightGBM-2E8B57" alt="Modelo LightGBM">
   </a>
-  <a href="tests/test_metrics.py">
-    <img src="https://img.shields.io/badge/tests-32%20passed-brightgreen" alt="32 pruebas aprobadas">
+  <a href="https://github.com/Diiimas/instacart-recommender/actions/workflows/ci.yml">
+    <img src="https://github.com/Diiimas/instacart-recommender/actions/workflows/ci.yml/badge.svg" alt="Estado de integración continua">
   </a>
-  <a href="#estado-del-proyecto">
-    <img src="https://img.shields.io/badge/status-Sprint%202-blue" alt="Estado Sprint 2">
+  <a href="tests/">
+    <img src="https://img.shields.io/badge/tests-59%20passed-brightgreen" alt="59 pruebas aprobadas">
+  </a>
+  <a href="https://basket-analytics-instacart.streamlit.app">
+    <img src="https://img.shields.io/badge/demo-Streamlit-FF4B4B?logo=streamlit&logoColor=white" alt="Demo en Streamlit">
   </a>
 </p>
 
-Sistema de recomendación **Top-10** desarrollado sobre el historial de compras de Instacart. El proyecto integra procesamiento reproducible, análisis exploratorio, ingeniería de características, modelado supervisado y evaluación offline bajo un protocolo temporal sin fuga de información.
+Sistema de recomendación desarrollado sobre el historial de compras de Instacart para anticipar el próximo carrito de cada cliente. El proyecto integra procesamiento reproducible, análisis exploratorio, ingeniería de características, modelado supervisado, evaluación offline y una demo interactiva desplegada públicamente.
 
-> **Estado actual:** pipeline, EDA, baselines, modelos y evaluación finalizados. La demo interactiva, el dashboard y la documentación de usuario se encuentran en integración para la Demo final.
+> **Demo pública:** [Basket Analytics — Instacart Recommender](https://basket-analytics-instacart.streamlit.app)
+
+> **Estado actual:** pipeline, EDA, baselines, modelos, evaluación, sistema final, pruebas y dashboard terminados. La integración continua valida automáticamente el código y los archivos necesarios para la demo.
 
 ## Contenido
 
 - [Objetivo](#objetivo)
+- [Sistema final](#sistema-final)
 - [Resultados](#resultados)
+- [Demo interactiva](#demo-interactiva)
 - [Arquitectura](#arquitectura)
 - [Datos y evaluación](#datos-y-evaluación)
 - [Cómo reproducir el proyecto](#cómo-reproducir-el-proyecto)
+- [Integración continua](#integración-continua)
 - [Estructura del repositorio](#estructura-del-repositorio)
 - [Documentación y notebooks](#documentación-y-notebooks)
 - [Estado del proyecto](#estado-del-proyecto)
@@ -45,19 +53,40 @@ Sistema de recomendación **Top-10** desarrollado sobre el historial de compras 
 
 ## Objetivo
 
-Generar diez recomendaciones de productos por usuario a partir de su historial de compras y comparar cada propuesta con dos referencias reproducibles:
-
-- **popularidad global:** los mismos productos frecuentes para todos los usuarios;
-- **recompra personal:** productos históricos de cada usuario ordenados por frecuencia relativa y recencia.
+Anticipar los productos que podrían formar parte del próximo carrito de cada usuario a partir de su historial de compras.
 
 El desarrollo busca responder dos necesidades diferentes:
 
 1. facilitar la recompra de productos habituales;
-2. explorar la recomendación de productos nuevos relevantes.
+2. explorar productos nuevos que podrían resultar relevantes.
+
+Para evaluar el ranking de recompra, cada modelo se compara con dos referencias reproducibles:
+
+- **popularidad global:** los mismos productos frecuentes para todos los usuarios;
+- **recompra personal:** productos históricos de cada usuario ordenados por frecuencia relativa y recencia.
+
+## Sistema final
+
+El recomendador entrega dos bloques independientes:
+
+- **Carrito habitual:** hasta 10 productos de recompra, ordenados por el modelo LightGBM.
+- **También podrías necesitar:** productos nuevos sugeridos mediante reglas de asociación y afinidad de categoría.
+
+La cantidad máxima de sugerencias nuevas depende del nivel de historial del usuario:
+
+| Segmento | Máximo de productos nuevos |
+|---|---:|
+| Nuevo | 5 |
+| Medio | 2 |
+| Heavy | 1 |
+
+Estos valores son máximos y no garantías. Un usuario puede recibir menos productos cuando su historial o el conjunto de candidatos no permiten completar el bloque con recomendaciones válidas.
+
+Las sugerencias nuevas se muestran de forma separada y no desplazan productos del carrito habitual.
 
 ## Resultados
 
-Los cinco sistemas se evaluaron con la misma función, el mismo corte `K=10` y los mismos **26.243 usuarios de validación**.
+Los cinco sistemas de recompra se evaluaron con la misma función, el mismo corte `K=10` y los mismos **26.243 usuarios de validación**.
 
 | Modelo | Precision@10 | Recall@10 macro | Recall@10 micro | Hit Rate@10 | Cobertura |
 |---|---:|---:|---:|---:|---:|
@@ -73,6 +102,20 @@ La cobertura se interpreta como amplitud del catálogo recomendado y no como sin
 
 Los valores completos y reproducibles se encuentran en [`reports/comparacion_final.csv`](reports/comparacion_final.csv). La interpretación metodológica está documentada en [`docs/analisis_resultados_y_metricas.md`](docs/analisis_resultados_y_metricas.md).
 
+## Demo interactiva
+
+La aplicación pública permite:
+
+- recorrer los resultados y las métricas principales;
+- comparar modelos y segmentos de usuarios;
+- analizar el comportamiento del sistema;
+- explorar recomendaciones individuales;
+- distinguir entre productos habituales y sugerencias nuevas.
+
+La demo consume recomendaciones precalculadas y versionadas en `reports/`. No reentrena el modelo durante la navegación ni necesita los datos originales de Instacart en el entorno de Streamlit Cloud.
+
+**Acceso:** [basket-analytics-instacart.streamlit.app](https://basket-analytics-instacart.streamlit.app)
+
 ## Arquitectura
 
 ```mermaid
@@ -82,10 +125,11 @@ flowchart LR
     C --> D[Features temporales y de comportamiento]
     D --> E[Baselines y modelos]
     E --> F[Evaluación Top-10]
-    F --> G[Reportes y demo]
+    F --> G[Exportación de recomendaciones]
+    G --> H[Dashboard en Streamlit]
 ```
 
-El procesamiento conserva la granularidad de las fuentes y construye salidas especializadas para catálogo, usuarios, productos, interacciones y objetivos de evaluación.
+El procesamiento conserva la granularidad de las fuentes y construye salidas especializadas para catálogo, usuarios, productos, interacciones, objetivos de evaluación y visualización.
 
 ## Datos y evaluación
 
@@ -105,13 +149,14 @@ Los archivos originales deben ubicarse localmente en `data/raw/` y no se almacen
 - `prior` representa el historial disponible para construir variables y candidatos;
 - `train` contiene la orden objetivo y se reserva para evaluación;
 - el split de entrenamiento y validación es temporal;
-- ningún modelo puede utilizar información de la orden objetivo para generar variables;
+- ningún modelo puede utilizar el contenido de la orden objetivo para generar variables;
 - todos los sistemas se comparan sobre los mismos usuarios, targets y métricas;
-- el corte oficial es `K=10`.
+- el corte oficial para el ranking de recompra es `K=10`;
+- los empates del ranking se resuelven mediante `product_id` ascendente.
 
 El repositorio diferencia dos universos que no deben mezclarse:
 
-- **131.209 usuarios evaluables:** análisis global de baseline, candidatos y novedad;
+- **131.209 usuarios evaluables:** análisis global de baselines, candidatos y novedad;
 - **26.243 usuarios de validación:** comparación oficial de los modelos.
 
 ## Cómo reproducir el proyecto
@@ -124,7 +169,7 @@ cd instacart-recommender
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-pytest -q
+python -m pytest tests/ -q
 ```
 
 La preparación de los datos y la ejecución completa requieren descargar previamente los seis CSV de Instacart. Consultá [`SETUP.md`](SETUP.md) para ver el procedimiento y las salidas esperadas.
@@ -135,25 +180,52 @@ Para regenerar la comparación final, una vez construidas las tablas procesadas 
 python src/models/comparar_todos.py
 ```
 
-El comando entrena y evalúa los cinco sistemas sobre el mismo conjunto de validación y actualiza `reports/comparacion_final.csv`.
+El comando entrena y evalúa los cinco sistemas de recompra sobre el mismo conjunto de validación y actualiza `reports/comparacion_final.csv`.
+
+Para ejecutar localmente el dashboard con las recomendaciones exportadas:
+
+```powershell
+streamlit run dashboard.py
+```
+
+## Integración continua
+
+El workflow de GitHub Actions se ejecuta ante:
+
+- cada `push` a `main`;
+- cada pull request dirigido a `main`;
+- una ejecución manual mediante `workflow_dispatch`.
+
+La validación automática utiliza Python 3.12, instala las dependencias y comprueba:
+
+- las 59 pruebas automatizadas;
+- la compilación de `dashboard.py`;
+- la presencia de los archivos requeridos por la demo.
+
+El workflow actual valida la integración del repositorio, pero **no descarga los datos originales, reentrena automáticamente los modelos ni registra experimentos en una plataforma de tracking**.
 
 ## Estructura del repositorio
 
 ```text
 instacart-recommender/
+├── .github/
+│   └── workflows/           # integración continua
+├── .streamlit/              # configuración de la demo
+├── assets/                  # identidad visual
 ├── data/
 │   ├── raw/                 # CSV originales, no versionados
 │   ├── interim/             # archivos temporales
 │   └── processed/           # tablas analíticas, no versionadas
 ├── docs/                    # contrato, diccionario y análisis
-├── notebooks/               # EDA, calidad y baselines
-├── reports/                 # métricas, parámetros e importancias
+├── notebooks/               # EDA, calidad, baselines y asociaciones
+├── reports/                 # métricas y datos precalculados de la demo
 ├── src/
 │   ├── data/                # carga, validación y construcción
 │   ├── evaluation/          # protocolo y métricas comunes
-│   ├── features/            # tabla de variables
-│   └── models/              # baselines, heurística, RL y LightGBM
-├── tests/                   # pruebas unitarias de métricas
+│   ├── features/            # tablas de variables
+│   └── models/              # baselines, modelos y sistema final
+├── tests/                   # pruebas de métricas y recomendador
+├── dashboard.py             # aplicación interactiva
 ├── README.md
 ├── SETUP.md
 └── requirements.txt
@@ -174,6 +246,7 @@ instacart-recommender/
 - [`02_calidad_data.ipynb`](notebooks/02_calidad_data.ipynb): integridad, distribuciones y outliers.
 - [`03_baseline.ipynb`](notebooks/03_baseline.ipynb): protocolo y baselines.
 - [`04_eda_features_para_modelo.ipynb`](notebooks/04_eda_features_para_modelo.ipynb): análisis de features, segmentos y control cualitativo.
+- [`05_reglas_asociacion_y_categoria.ipynb`](notebooks/05_reglas_asociacion_y_categoria.ipynb): análisis de reglas de asociación y categorías para productos nuevos.
 
 ## Estado del proyecto
 
@@ -183,11 +256,12 @@ instacart-recommender/
 | EDA y análisis de calidad | ✅ Terminado |
 | Ingeniería de características | ✅ Terminada |
 | Baselines y modelos | ✅ Terminados |
-| Protocolo y pruebas de métricas | ✅ 32 pruebas aprobadas |
+| Sistema final de dos bloques | ✅ Terminado |
+| Protocolo y pruebas automatizadas | ✅ 59 pruebas aprobadas |
 | Comparación final | ✅ Terminada |
-| Demo interactiva | 🚧 En integración |
-| Dashboard | 🚧 En desarrollo |
-| Manual de usuario | 🚧 En desarrollo |
+| Demo y dashboard | ✅ Desplegados |
+| Integración continua | ✅ Activa |
+| Reentrenamiento automático y tracking | No implementados |
 
 ## Equipo
 
@@ -206,5 +280,7 @@ Los roles representan áreas de liderazgo. La integración y revisión del produ
 - La naturaleza del dataset favorece la recompra y dificulta medir descubrimiento con la misma métrica.
 - Los archivos originales y procesados no se incluyen en el repositorio por su volumen.
 - La comparación oficial mide ranking sobre candidatos disponibles; la generación de productos nuevos se evalúa por separado.
-- La demo y el dashboard todavía están en integración y no representan un despliegue productivo.
-
+- Las reglas de asociación describen coocurrencias históricas y no demuestran por sí solas complementariedad o causalidad.
+- El dataset no incluye variables como precios y promociones, por lo que su posible aporte constituye una hipótesis y no una mejora demostrada.
+- La demo utiliza recomendaciones precalculadas y no representa un sistema de inferencia ni reentrenamiento en tiempo real.
+- La integración continua actual valida el producto de software, pero no automatiza el ciclo completo de MLOps.
