@@ -116,6 +116,13 @@ La demo consume recomendaciones precalculadas y versionadas en `reports/`. No re
 
 **Acceso:** [basket-analytics-instacart.streamlit.app](https://basket-analytics-instacart.streamlit.app)
 
+### Vista del explorador
+
+![Explorador con recomendaciones de recompra y productos nuevos](assets/dashboard_demo.png)
+
+Ejemplo individual del cliente 64695. Sus resultados no representan
+el rendimiento global; las métricas agregadas se presentan en Resultados.
+
 ## Arquitectura
 
 ```mermaid
